@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contato e Inscrição — Juliana Balbino</title>
+  <meta name="description" content="Entre em contato ou inscreva-se para receber novidades sobre moda, bem-estar e qualidade de vida.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="nav">
+      <a href="index.html" class="brand">Juliana Balbino<small>moda · bem-estar · qualidade de vida</small></a>
+      <ul class="nav-links">
+        <li><a href="index.html">Início</a></li>
+        <li><a href="moda.html">Moda</a></li>
+        <li><a href="bem-estar.html">Bem-estar</a></li>
+        <li><a href="qualidade-vida.html">Qualidade de Vida</a></li>
+        <li><a href="contato.html">Contato</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <h1>Vamos manter contato?</h1>
+        <p class="tagline">Preencha o formulário abaixo e receba dicas exclusivas de moda, bem-estar e qualidade de vida diretamente no seu e-mail. 💕</p>
+      </div>
+    </section>
+
+    <section class="section container">
+      <div class="form-wrapper">
+        <p class="form-intro">Os campos com <span style="color:var(--color-primary);">*</span> são obrigatórios.</p>
+
+        <form id="contato-form" novalidate>
+          <div class="form-group">
+            <label for="nome">Nome <span class="required">*</span></label>
+            <input type="text" id="nome" name="nome" autocomplete="name" required maxlength="80">
+            <span class="field-error"></span>
+          </div>
+
+          <div class="form-group">
+            <label for="email">E-mail <span class="required">*</span></label>
+            <input type="email" id="email" name="email" autocomplete="email" required maxlength="120">
+            <span class="field-error"></span>
+          </div>
+
+          <div class="form-group">
+            <label for="idade">Idade</label>
+            <input type="number" id="idade" name="idade" min="10" max="120">
+            <span class="field-error"></span>
+          </div>
+
+          <div class="form-group">
+            <label for="cidade">Cidade</label>
+            <input type="text" id="cidade" name="cidade" autocomplete="address-level2" maxlength="80">
+            <span class="field-error"></span>
+          </div>
+
+          <div class="form-group">
+            <label>Quais temas te interessam?</label>
+            <div class="checkbox-grid">
+              <label><input type="checkbox" name="interesses" value="Moda"> Moda</label>
+              <label><input type="checkbox" name="interesses" value="Bem-estar"> Bem-estar</label>
+              <label><input type="checkbox" name="interesses" value="Qualidade de Vida"> Qualidade de Vida</label>
+              <label><input type="checkbox" name="interesses" value="Alimentação"> Alimentação</label>
+              <label><input type="checkbox" name="interesses" value="Meditação"> Meditação</label>
+              <label><input type="checkbox" name="interesses" value="Exercícios"> Exercícios</label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="mensagem">Mensagem</label>
+            <textarea id="mensagem" name="mensagem" rows="4" maxlength="1000" placeholder="Conte um pouquinho sobre você ou deixe sua dúvida/sugestão..."></textarea>
+            <span class="field-error"></span>
+          </div>
+
+          <div class="form-group">
+            <label style="font-weight:400;">
+              <input type="checkbox" id="newsletter" name="newsletter" checked>
+              Quero receber a newsletter por e-mail.
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label style="font-weight:400;">
+              <input type="checkbox" id="consent" name="consent">
+              Concordo com o uso dos meus dados para receber o conteúdo solicitado. <span class="required">*</span>
+            </label>
+            <span class="field-error"></span>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn">Enviar</button>
+          </div>
+
+          <div class="form-message" role="status" aria-live="polite"></div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div><h4>Juliana Balbino</h4><p>Moda, bem-estar e qualidade de vida com leveza e propósito.</p></div>
+      <div><h4>Navegação</h4><p><a href="index.html">Início</a><br><a href="moda.html">Moda</a><br><a href="bem-estar.html">Bem-estar</a><br><a href="qualidade-vida.html">Qualidade de Vida</a><br><a href="contato.html">Contato</a></p></div>
+      <div><h4>Privacidade</h4><p>Seus dados são armazenados localmente no seu navegador apenas para fins de demonstração e não são compartilhados.</p></div>
+    </div>
+    <div class="copy">© <span id="year"></span> Juliana Balbino. Todos os direitos reservados.</div>
+  </footer>
+
+  <script src="js/main.js"></script>
+  <script src="js/form.js"></script>
+</body>
+</html>

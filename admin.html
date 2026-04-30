@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inscrições — Painel Admin — Juliana Balbino</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="nav">
+      <a href="index.html" class="brand">Juliana Balbino<small>painel administrativo</small></a>
+      <ul class="nav-links">
+        <li><a href="index.html">Início</a></li>
+        <li><a href="contato.html">Formulário</a></li>
+        <li><a href="admin.html">Inscrições</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <main>
+    <section class="section container">
+      <div class="section-title"><h2>Inscrições recebidas</h2></div>
+      <p class="text-center" style="color:var(--color-muted);">
+        Esta página exibe as inscrições enviadas pelo formulário de contato.
+        Os dados ficam armazenados <strong>apenas no seu navegador</strong> (localStorage).
+      </p>
+      <p class="text-center" style="margin-bottom:1.5rem;">
+        Total de inscrições: <strong id="submissions-count">0</strong>
+      </p>
+
+      <div class="admin-toolbar">
+        <a href="contato.html" class="btn btn-outline">+ Nova inscrição</a>
+        <div>
+          <button id="btn-export" class="btn btn-outline" type="button">Exportar JSON</button>
+          <button id="btn-clear" class="btn" type="button" style="background:var(--color-error);">Apagar tudo</button>
+        </div>
+      </div>
+
+      <div id="submissions-container"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div><h4>Juliana Balbino</h4><p>Painel administrativo do blog.</p></div>
+      <div><h4>Navegação</h4><p><a href="index.html">Início</a><br><a href="contato.html">Formulário</a><br><a href="admin.html">Inscrições</a></p></div>
+    </div>
+    <div class="copy">© <span id="year"></span> Juliana Balbino.</div>
+  </footer>
+
+  <script src="js/main.js"></script>
+  <script src="js/form.js"></script>
+</body>
+</html>
