@@ -71,6 +71,14 @@
   function getGallery() { return getJSON(GALLERY_KEY, []); }
   function setGallery(arr) { setJSON(GALLERY_KEY, arr); }
 
+  // imagem efetivamente exibida no site para um slot (custom > default)
+  function effectiveImage(key) {
+    var custom = getImages();
+    if (custom[key]) return custom[key];
+    var defaults = window.JB_DEFAULT_IMAGES || {};
+    return defaults[key] || null;
+  }
+
   // ---------- hash SHA-256 ----------
   async function sha256(text) {
     var enc = new TextEncoder().encode(SALT + '|' + text);
@@ -157,20 +165,25 @@
   function renderImageSlots() {
     var container = document.getElementById('image-slots');
     if (!container) return;
-    var images = getImages();
+    var custom = getImages();
     container.innerHTML = SLOTS.map(function (slot) {
-      var current = images[slot.key];
+      var current = effectiveImage(slot.key);
+      var isCustom = !!custom[slot.key];
       var preview = current
         ? '<div class="preview" style="background-image:url(' + JSON.stringify(current) + ');"></div>'
         : '<div class="preview"><span class="empty-label">Sem imagem</span></div>';
+      var badge = isCustom
+        ? '<span class="slot-key" style="color:var(--color-primary-dark);">★ personalizada</span>'
+        : '<span class="slot-key">padrão (Pexels)</span>';
       return '<div class="image-slot" data-slot-key="' + esc(slot.key) + '">' +
         '<h4>' + esc(slot.label) + '</h4>' +
         '<span class="slot-key">' + esc(slot.key) + ' · ' + esc(slot.page) + '</span>' +
+        badge +
         preview +
         '<div class="actions">' +
           '<label>📁 Upload<input type="file" accept="image/*" hidden class="slot-file"></label>' +
           '<button type="button" class="slot-pexels">🔎 Pexels</button>' +
-          '<button type="button" class="slot-clear danger">Remover</button>' +
+          '<button type="button" class="slot-clear danger">' + (isCustom ? 'Restaurar padrão' : 'Limpar') + '</button>' +
         '</div>' +
         '</div>';
     }).join('');
@@ -200,8 +213,9 @@
         openPexelsPicker(key);
       });
       el.querySelector('.slot-clear').addEventListener('click', function () {
-        if (!confirm('Remover a imagem deste slot? Voltará ao visual padrão.')) return;
         var imgs = getImages();
+        if (!imgs[key]) { return; }
+        if (!confirm('Restaurar a imagem padrão (Pexels) deste slot?')) return;
         delete imgs[key];
         setImages(imgs);
         renderImageSlots();
@@ -327,22 +341,31 @@
   function renderGalleryCurrent() {
     var box = document.getElementById('gallery-current');
     if (!box) return;
-    var items = getGallery();
+    var stored = getJSON(GALLERY_KEY, null);
+    var usingDefault = !stored || !stored.length;
+    var items = usingDefault ? (window.JB_DEFAULT_GALLERY || []) : stored;
+    var heading = usingDefault
+      ? '<p style="color:var(--color-muted);font-size:0.9rem;">Exibindo a <strong>galeria padrão</strong> (curadoria Pexels). Adicione fotos abaixo para criar sua própria seleção.</p>'
+      : '';
     if (!items.length) {
-      box.innerHTML = '<p style="color:var(--color-muted)">A galeria pública está vazia.</p>';
+      box.innerHTML = heading + '<p style="color:var(--color-muted)">A galeria pública está vazia.</p>';
       return;
     }
-    box.innerHTML = '<p><strong>' + items.length + '</strong> foto(s) na galeria pública. ' +
-      '<button type="button" id="gallery-clear" class="btn btn-outline" style="margin-left:0.5rem;">Esvaziar galeria</button></p>' +
+    var clearBtn = usingDefault
+      ? ''
+      : '<button type="button" id="gallery-clear" class="btn btn-outline" style="margin-left:0.5rem;">Voltar à galeria padrão</button>';
+    box.innerHTML = heading +
+      '<p><strong>' + items.length + '</strong> foto(s)' + (usingDefault ? '' : ' selecionadas por você') + '. ' + clearBtn + '</p>' +
       '<div class="pexels-results">' + items.map(function (it, i) {
-        return '<div class="pexels-result" data-remove="' + i + '">' +
+        return '<div class="pexels-result"' + (usingDefault ? '' : ' data-remove="' + i + '"') + '>' +
           '<img src="' + esc(it.thumb || it.src) + '" alt="' + esc(it.alt) + '">' +
-          '<div class="credit">' + esc(it.photographer) + ' · clique p/ remover</div>' +
+          '<div class="credit">' + esc(it.photographer) + (usingDefault ? '' : ' · clique p/ remover') + '</div>' +
           '</div>';
       }).join('') + '</div>';
-    box.querySelector('#gallery-clear').addEventListener('click', function () {
-      if (confirm('Remover todas as fotos da galeria pública?')) {
-        setGallery([]);
+    var btn = box.querySelector('#gallery-clear');
+    if (btn) btn.addEventListener('click', function () {
+      if (confirm('Remover sua seleção e voltar à galeria padrão?')) {
+        localStorage.removeItem(GALLERY_KEY);
         renderGalleryCurrent();
       }
     });

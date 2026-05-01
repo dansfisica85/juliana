@@ -11,17 +11,28 @@
   var GALLERY_KEY = 'jb_pexels_gallery';
 
   function getImages() {
+    var custom = {};
     try {
       var raw = localStorage.getItem(IMAGES_KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch (e) { return {}; }
+      if (raw) custom = JSON.parse(raw) || {};
+    } catch (e) { custom = {}; }
+    var defaults = window.JB_DEFAULT_IMAGES || {};
+    // customizado tem prioridade sobre defaults
+    var merged = {};
+    Object.keys(defaults).forEach(function (k) { merged[k] = defaults[k]; });
+    Object.keys(custom).forEach(function (k) { merged[k] = custom[k]; });
+    return merged;
   }
 
   function getGallery() {
     try {
       var raw = localStorage.getItem(GALLERY_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) { return []; }
+      if (raw) {
+        var arr = JSON.parse(raw);
+        if (Array.isArray(arr) && arr.length) return arr;
+      }
+    } catch (e) {}
+    return window.JB_DEFAULT_GALLERY || [];
   }
 
   function applyImages() {
