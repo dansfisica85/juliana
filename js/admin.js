@@ -1,485 +1,595 @@
-/* Juliana Balbino — Painel Administrativo
- *
- * Funcionalidades:
- *   1) Login simples (apenas client-side, hash SHA-256 + sal estático armazenado em localStorage).
- *      ATENÇÃO: o site é estático (sem servidor), então este "login" é uma camada
- *      de conveniência que evita acesso casual. Não substitui autenticação real.
- *   2) Gerenciador de imagens: upload de fotos próprias (data URL) ou seleção
- *      a partir da busca Pexels para substituir cada slot do site.
- *   3) Curadoria da galeria Pexels (moda Milão, Paris, Nova York, jovens fashion etc.)
- *      A galeria fica salva em localStorage e é exibida na página de Moda.
- *   4) Visualização das inscrições do formulário (continua em form.js).
+/* eslint-disable no-var */
+/**
+ * Painel administrativo — Juliana Balbino
+ *  Requer estar logado (ver botão flutuante em site-app.js).
+ *  Conversa com /api/* via fetchJson (cookies HttpOnly).
  */
 (function () {
-  // ---------- chaves ----------
-  var PWHASH_KEY = 'jb_admin_pwhash';
-  var SESSION_KEY = 'jb_admin_session';
-  var IMAGES_KEY = 'jb_images';
-  var GALLERY_KEY = 'jb_pexels_gallery';
-  var PEXELS_KEY = 'jb_pexels_apikey';
-  var SALT = 'juliana-balbino-comunicacao-imagem-2026';
+  'use strict';
+  var API = '/api';
 
-  // Senha inicial padrão (substituída na primeira troca pela admin).
-  var DEFAULT_PASSWORD = 'juliana2026';
-
-  // ---------- catálogo de slots de imagem ----------
-  // Cada slot corresponde a um elemento [data-img-key="..."] em alguma página.
-  var SLOTS = [
-    { key: 'home-hero', label: 'Início — Banner principal', page: 'index.html' },
-    { key: 'home-post-moda', label: 'Início — Card "Moda"', page: 'index.html' },
-    { key: 'home-post-bem', label: 'Início — Card "Bem-estar"', page: 'index.html' },
-    { key: 'home-post-vida', label: 'Início — Card "Qualidade de Vida"', page: 'index.html' },
-
-    { key: 'moda-hero', label: 'Moda — Banner', page: 'moda.html' },
-    { key: 'moda-post-1', label: 'Moda — Card 1 (Outono 2026)', page: 'moda.html' },
-    { key: 'moda-post-2', label: 'Moda — Card 2 (Cápsula)', page: 'moda.html' },
-    { key: 'moda-post-3', label: 'Moda — Card 3 (Sustentável)', page: 'moda.html' },
-
-    { key: 'bem-hero', label: 'Bem-estar — Banner', page: 'bem-estar.html' },
-    { key: 'bem-post-1', label: 'Bem-estar — Card 1 (Meditação)', page: 'bem-estar.html' },
-    { key: 'bem-post-2', label: 'Bem-estar — Card 2 (Respiração)', page: 'bem-estar.html' },
-    { key: 'bem-post-3', label: 'Bem-estar — Card 3 (Yoga)', page: 'bem-estar.html' },
-
-    { key: 'vida-hero', label: 'Qualidade de Vida — Banner', page: 'qualidade-vida.html' },
-    { key: 'vida-post-1', label: 'Qualidade — Card 1 (Sono)', page: 'qualidade-vida.html' },
-    { key: 'vida-post-2', label: 'Qualidade — Card 2 (Hidratação)', page: 'qualidade-vida.html' },
-    { key: 'vida-post-3', label: 'Qualidade — Card 3 (Manhã)', page: 'qualidade-vida.html' }
-  ];
-
-  // ---------- presets de busca Pexels ----------
-  var PEXELS_PRESETS = [
-    { label: 'Moda Milão', query: 'milan fashion week street style' },
-    { label: 'Moda Paris', query: 'paris fashion week elegant outfit' },
-    { label: 'Moda Nova York', query: 'new york fashion street style' },
-    { label: 'Jovens fashion', query: 'young adults fashionable outfit' },
-    { label: 'Adultos elegantes', query: 'stylish adult portrait fashion' },
-    { label: 'Lugares fashion', query: 'fashion city street architecture' },
-    { label: 'Moda outono', query: 'autumn fashion warm tones' }
-  ];
-
-  // ---------- helpers de armazenamento ----------
-  function getJSON(key, fallback) {
-    try {
-      var raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
-    } catch (e) { return fallback; }
-  }
-  function setJSON(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
-
-  function getImages() { return getJSON(IMAGES_KEY, {}); }
-  function setImages(obj) { setJSON(IMAGES_KEY, obj); }
-  function getGallery() { return getJSON(GALLERY_KEY, []); }
-  function setGallery(arr) { setJSON(GALLERY_KEY, arr); }
-
-  // imagem efetivamente exibida no site para um slot (custom > default)
-  function effectiveImage(key) {
-    var custom = getImages();
-    if (custom[key]) return custom[key];
-    var defaults = window.JB_DEFAULT_IMAGES || {};
-    return defaults[key] || null;
-  }
-
-  // ---------- hash SHA-256 ----------
-  async function sha256(text) {
-    var enc = new TextEncoder().encode(SALT + '|' + text);
-    var buf = await crypto.subtle.digest('SHA-256', enc);
-    return Array.from(new Uint8Array(buf))
-      .map(function (b) { return b.toString(16).padStart(2, '0'); })
-      .join('');
-  }
-
-  async function ensureDefaultPassword() {
-    if (!localStorage.getItem(PWHASH_KEY)) {
-      var h = await sha256(DEFAULT_PASSWORD);
-      localStorage.setItem(PWHASH_KEY, h);
-    }
-  }
-
-  function isLoggedIn() { return sessionStorage.getItem(SESSION_KEY) === '1'; }
-  function setLoggedIn(v) {
-    if (v) sessionStorage.setItem(SESSION_KEY, '1');
-    else sessionStorage.removeItem(SESSION_KEY);
-  }
-
-  // ---------- escape ----------
+  function $(s, c) { return (c || document).querySelector(s); }
+  function $$(s, c) { return Array.prototype.slice.call((c || document).querySelectorAll(s)); }
   function esc(s) {
     return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;');
+  }
+  function fetchJson(url, opts) {
+    opts = opts || {};
+    opts.credentials = 'include';
+    if (opts.body && !(opts.body instanceof FormData)) {
+      opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+    }
+    return fetch(url, opts).then(function (r) {
+      return r.json().then(function (data) {
+        if (!r.ok) {
+          var e = new Error(data && data.error ? data.error : ('http_' + r.status));
+          e.status = r.status; e.data = data; throw e;
+        }
+        return data;
+      });
+    });
+  }
+  function setStatus(text, type) {
+    var el = $('#admin-status');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'admin-status' + (type ? ' ' + type : '');
+    if (text) setTimeout(function () { if (el.textContent === text) { el.textContent = ''; el.className = 'admin-status'; } }, 4000);
   }
 
-  // ---------- UI: login ----------
+  // -------------------------------------------------------------------------
+  // Catálogo dos slots editáveis (chave => rótulo amigável)
+  // -------------------------------------------------------------------------
+  var SLOT_CATALOG = [
+    { group: 'Início', items: [
+      { key: 'home-hero',      label: 'Hero principal' },
+      { key: 'home-post-moda', label: 'Card — Moda' },
+      { key: 'home-post-bem',  label: 'Card — Bem-estar' },
+      { key: 'home-post-vida', label: 'Card — Qualidade de Vida' },
+    ]},
+    { group: 'Moda', items: [
+      { key: 'moda-hero',   label: 'Hero da página Moda' },
+      { key: 'moda-post-1', label: 'Card 1' },
+      { key: 'moda-post-2', label: 'Card 2' },
+      { key: 'moda-post-3', label: 'Card 3' },
+    ]},
+    { group: 'Bem-estar', items: [
+      { key: 'bem-hero',   label: 'Hero da página Bem-estar' },
+      { key: 'bem-post-1', label: 'Card 1' },
+      { key: 'bem-post-2', label: 'Card 2' },
+      { key: 'bem-post-3', label: 'Card 3' },
+    ]},
+    { group: 'Qualidade de Vida', items: [
+      { key: 'vida-hero',   label: 'Hero da página Qualidade de Vida' },
+      { key: 'vida-post-1', label: 'Card 1' },
+      { key: 'vida-post-2', label: 'Card 2' },
+      { key: 'vida-post-3', label: 'Card 3' },
+    ]},
+  ];
+
+  // -------------------------------------------------------------------------
+  // Estado
+  // -------------------------------------------------------------------------
+  var st = {
+    me: null,
+    slots: {},
+    uploads: [],
+    localMedia: [],
+  };
+
+  // -------------------------------------------------------------------------
+  // Login & sessão
+  // -------------------------------------------------------------------------
   function showLogin() {
-    document.getElementById('login-section').style.display = '';
-    document.getElementById('admin-section').style.display = 'none';
+    $('#login-section').style.display = '';
+    $('#admin-section').style.display = 'none';
   }
   function showAdmin() {
-    document.getElementById('login-section').style.display = 'none';
-    document.getElementById('admin-section').style.display = '';
-    renderImageSlots();
-    renderGalleryCuration();
-    var keyInput = document.getElementById('pexels-key');
-    if (keyInput) keyInput.value = localStorage.getItem(PEXELS_KEY) || '';
+    $('#login-section').style.display = 'none';
+    $('#admin-section').style.display = '';
+    var who = $('#admin-username'); if (who && st.me) who.textContent = st.me.username;
+    var pu = $('#profile-username'); if (pu && st.me) pu.value = st.me.username;
   }
 
-  async function handleLogin(e) {
-    e.preventDefault();
-    var pw = document.getElementById('login-password').value;
-    var msg = document.getElementById('login-message');
-    var hash = await sha256(pw);
-    var stored = localStorage.getItem(PWHASH_KEY);
-    if (hash === stored) {
-      setLoggedIn(true);
-      msg.className = 'admin-status';
-      msg.textContent = '';
-      showAdmin();
-    } else {
-      msg.className = 'admin-status error';
-      msg.textContent = 'Senha incorreta. Tente novamente.';
-    }
+  function bindLogin() {
+    var f = $('#login-form');
+    if (!f) return;
+    f.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var msg = $('#login-message');
+      msg.textContent = ''; msg.className = 'admin-status';
+      fetchJson(API + '/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          username: f.querySelector('[name=username]').value.trim(),
+          password: f.querySelector('[name=password]').value,
+        }),
+      }).then(function (r) {
+        st.me = r.user;
+        showAdmin();
+        loadAll();
+      }).catch(function (err) {
+        msg.className = 'admin-status error';
+        msg.textContent = err.status === 401 ? 'Login ou senha incorretos.' : 'Falha ao entrar.';
+      });
+    });
   }
 
-  async function handleChangePassword() {
-    var atual = prompt('Digite a senha atual:');
-    if (atual == null) return;
-    var hash = await sha256(atual);
-    if (hash !== localStorage.getItem(PWHASH_KEY)) {
-      alert('Senha atual incorreta.');
-      return;
-    }
-    var nova = prompt('Nova senha (mínimo 6 caracteres):');
-    if (!nova || nova.length < 6) { alert('Senha muito curta.'); return; }
-    var conf = prompt('Confirme a nova senha:');
-    if (nova !== conf) { alert('As senhas não conferem.'); return; }
-    var nh = await sha256(nova);
-    localStorage.setItem(PWHASH_KEY, nh);
-    alert('Senha alterada com sucesso!');
+  function bindLogout() {
+    $('#btn-logout').addEventListener('click', function () {
+      fetchJson(API + '/auth/logout', { method: 'POST' }).finally(function () {
+        st.me = null;
+        showLogin();
+      });
+    });
   }
 
-  function handleLogout() {
-    setLoggedIn(false);
-    showLogin();
+  // -------------------------------------------------------------------------
+  // Tabs
+  // -------------------------------------------------------------------------
+  function bindTabs() {
+    $$('.admin-tab').forEach(function (b) {
+      b.addEventListener('click', function () {
+        $$('.admin-tab').forEach(function (x) { x.classList.remove('active'); });
+        b.classList.add('active');
+        var tab = b.getAttribute('data-tab');
+        $$('.admin-panel').forEach(function (p) { p.classList.remove('active'); });
+        var target = $('#panel-' + tab);
+        if (target) target.classList.add('active');
+      });
+    });
   }
 
-  // ---------- UI: image slots ----------
-  function renderImageSlots() {
-    var container = document.getElementById('image-slots');
-    if (!container) return;
-    var custom = getImages();
-    container.innerHTML = SLOTS.map(function (slot) {
-      var current = effectiveImage(slot.key);
-      var isCustom = !!custom[slot.key];
-      var preview = current
-        ? '<div class="preview" style="background-image:url(' + JSON.stringify(current) + ');"></div>'
-        : '<div class="preview"><span class="empty-label">Sem imagem</span></div>';
-      var badge = isCustom
-        ? '<span class="slot-key" style="color:var(--color-primary-dark);">★ personalizada</span>'
-        : '<span class="slot-key">padrão (Pexels)</span>';
-      return '<div class="image-slot" data-slot-key="' + esc(slot.key) + '">' +
-        '<h4>' + esc(slot.label) + '</h4>' +
-        '<span class="slot-key">' + esc(slot.key) + ' · ' + esc(slot.page) + '</span>' +
-        badge +
-        preview +
-        '<div class="actions">' +
-          '<label>📁 Upload<input type="file" accept="image/*" hidden class="slot-file"></label>' +
-          '<button type="button" class="slot-pexels">🔎 Pexels</button>' +
-          '<button type="button" class="slot-clear danger">' + (isCustom ? 'Restaurar padrão' : 'Limpar') + '</button>' +
-        '</div>' +
-        '</div>';
-    }).join('');
-
-    container.querySelectorAll('.image-slot').forEach(function (el) {
-      var key = el.getAttribute('data-slot-key');
-      el.querySelector('.slot-file').addEventListener('change', function (ev) {
-        var file = ev.target.files && ev.target.files[0];
-        if (!file) return;
-        if (!file.type.startsWith('image/')) { alert('Selecione uma imagem.'); return; }
-        if (file.size > 4 * 1024 * 1024) {
-          if (!confirm('Imagem maior que 4MB pode estourar o armazenamento do navegador. Continuar?')) return;
-        }
-        var reader = new FileReader();
-        reader.onload = function () {
-          var imgs = getImages();
-          imgs[key] = reader.result;
-          try { setImages(imgs); } catch (e) {
-            alert('Falha ao salvar (armazenamento cheio?). Tente uma imagem menor.'); return;
-          }
-          renderImageSlots();
-          flash('Imagem atualizada com sucesso!', 'success');
+  // -------------------------------------------------------------------------
+  // Perfil
+  // -------------------------------------------------------------------------
+  function bindProfile() {
+    $('#profile-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var f = e.currentTarget;
+      fetchJson(API + '/auth/profile', {
+        method: 'PUT',
+        body: JSON.stringify({
+          newUsername: f.newUsername.value.trim(),
+          currentPassword: f.currentPassword.value,
+          newPassword: f.newPassword.value || undefined,
+        }),
+      }).then(function (r) {
+        st.me = r.user;
+        $('#admin-username').textContent = r.user.username;
+        f.currentPassword.value = ''; f.newPassword.value = '';
+        setStatus('Perfil atualizado com sucesso.', 'success');
+      }).catch(function (err) {
+        var map = {
+          invalid_current_password: 'Senha atual incorreta.',
+          weak_password: 'Senha nova precisa ter pelo menos 8 caracteres.',
+          invalid_username: 'Login deve ter 3-40 caracteres (letras, números, . _ -).',
         };
-        reader.readAsDataURL(file);
-      });
-      el.querySelector('.slot-pexels').addEventListener('click', function () {
-        openPexelsPicker(key);
-      });
-      el.querySelector('.slot-clear').addEventListener('click', function () {
-        var imgs = getImages();
-        if (!imgs[key]) { return; }
-        if (!confirm('Restaurar a imagem padrão (Pexels) deste slot?')) return;
-        delete imgs[key];
-        setImages(imgs);
-        renderImageSlots();
+        setStatus(map[err.message] || 'Não foi possível salvar o perfil.', 'error');
       });
     });
   }
 
-  function flash(text, type) {
-    var box = document.getElementById('admin-status');
-    if (!box) return;
-    box.className = 'admin-status ' + (type || 'info');
-    box.textContent = text;
-    setTimeout(function () { box.className = 'admin-status'; box.textContent = ''; }, 3500);
+  // -------------------------------------------------------------------------
+  // Carregamento principal
+  // -------------------------------------------------------------------------
+  function loadAll() {
+    return Promise.all([
+      fetchJson(API + '/content/slots'),
+      fetchJson(API + '/uploads'),
+      fetchJson(API + '/local-media'),
+    ]).then(function (r) {
+      st.slots = r[0].slots || {};
+      st.uploads = r[1].files || [];
+      st.localMedia = r[2].files || [];
+      renderSlots();
+      renderLibrary();
+    }).catch(function () { setStatus('Falha ao carregar dados.', 'error'); });
   }
 
-  // ---------- Pexels API ----------
-  function getPexelsKey() {
-    return (document.getElementById('pexels-key') || {}).value
-      || localStorage.getItem(PEXELS_KEY) || '';
-  }
-
-  async function searchPexels(query, perPage) {
-    var key = getPexelsKey();
-    if (!key) {
-      throw new Error('Configure sua chave gratuita do Pexels primeiro (https://www.pexels.com/api/).');
-    }
-    localStorage.setItem(PEXELS_KEY, key);
-    var url = 'https://api.pexels.com/v1/search?query=' +
-      encodeURIComponent(query) + '&per_page=' + (perPage || 18) + '&orientation=portrait';
-    var res = await fetch(url, { headers: { Authorization: key } });
-    if (!res.ok) {
-      var msg = 'Falha ao consultar Pexels (HTTP ' + res.status + ').';
-      if (res.status === 401) msg += ' Verifique a chave de API.';
-      throw new Error(msg);
-    }
-    var data = await res.json();
-    return (data.photos || []).map(function (p) {
-      return {
-        id: p.id,
-        thumb: p.src && (p.src.medium || p.src.small || p.src.tiny),
-        src: p.src && (p.src.large || p.src.medium || p.src.original),
-        large: p.src && (p.src.large2x || p.src.large || p.src.original),
-        url: p.url,
-        photographer: p.photographer,
-        alt: p.alt || query
-      };
+  // -------------------------------------------------------------------------
+  // Slots
+  // -------------------------------------------------------------------------
+  function renderSlots() {
+    var host = $('#image-slots');
+    if (!host) return;
+    host.innerHTML = SLOT_CATALOG.map(function (g) {
+      return '<div class="slot-group"><h3>' + esc(g.group) + '</h3>' +
+        '<div class="slot-grid">' + g.items.map(slotCard).join('') + '</div></div>';
+    }).join('');
+    $$('[data-slot-action]', host).forEach(function (btn) {
+      btn.addEventListener('click', onSlotAction);
     });
   }
 
-  // ---------- Pexels picker (para um slot) ----------
-  var pickerState = { slotKey: null, results: [] };
-
-  function openPexelsPicker(slotKey) {
-    pickerState.slotKey = slotKey;
-    pickerState.results = [];
-    var dialog = document.getElementById('pexels-picker');
-    dialog.style.display = '';
-    document.getElementById('pexels-picker-title').textContent =
-      'Buscar foto no Pexels para: ' + (SLOTS.find(function (s) { return s.key === slotKey; }) || { label: slotKey }).label;
-    document.getElementById('pexels-picker-results').innerHTML = '';
-    document.getElementById('pexels-picker-query').value = '';
-    document.getElementById('pexels-picker-query').focus();
+  function slotCard(it) {
+    var cur = st.slots[it.key];
+    var preview = cur && cur.src
+      ? (cur.kind === 'video'
+          ? '<video src="' + esc(cur.src) + '" muted loop playsinline></video>'
+          : '<img src="' + esc(cur.src) + '" alt="">')
+      : '<div class="slot-empty">Sem mídia personalizada</div>';
+    var featured = cur && cur.featured ? ' checked' : '';
+    return '<div class="slot-card" data-key="' + esc(it.key) + '">' +
+      '<div class="slot-preview">' + preview + '</div>' +
+      '<div class="slot-info">' +
+        '<strong>' + esc(it.label) + '</strong>' +
+        '<small>' + esc(it.key) + '</small>' +
+        '<label class="slot-featured"><input type="checkbox"' + featured + ' data-slot-action="toggle-featured"> Destaque (roupa escura)</label>' +
+        '<div class="slot-actions">' +
+          '<button type="button" class="btn btn-outline" data-slot-action="pick-library">Escolher da biblioteca</button>' +
+          '<button type="button" class="btn btn-outline" data-slot-action="pick-pexels">Buscar no Pexels</button>' +
+          '<button type="button" class="btn btn-outline" data-slot-action="upload">Enviar arquivo</button>' +
+          '<button type="button" class="btn" data-slot-action="reset" style="background:var(--color-error);">Limpar</button>' +
+        '</div>' +
+      '</div></div>';
   }
 
-  function closePexelsPicker() {
-    document.getElementById('pexels-picker').style.display = 'none';
-    pickerState.slotKey = null;
-  }
-
-  async function runPexelsPickerSearch() {
-    var q = document.getElementById('pexels-picker-query').value.trim();
-    if (!q) return;
-    var results = document.getElementById('pexels-picker-results');
-    results.innerHTML = '<p style="color:var(--color-muted)">Buscando…</p>';
-    try {
-      var photos = await searchPexels(q, 18);
-      pickerState.results = photos;
-      if (!photos.length) { results.innerHTML = '<p>Nenhum resultado.</p>'; return; }
-      results.innerHTML = photos.map(function (p, i) {
-        return '<div class="pexels-result" data-i="' + i + '">' +
-          '<img src="' + esc(p.thumb) + '" alt="' + esc(p.alt) + '" loading="lazy">' +
-          '<div class="credit">' + esc(p.photographer) + '</div>' +
-          '</div>';
-      }).join('');
-      results.querySelectorAll('.pexels-result').forEach(function (el) {
-        el.addEventListener('click', function () {
-          var idx = parseInt(el.getAttribute('data-i'), 10);
-          var photo = pickerState.results[idx];
-          if (!photo || !pickerState.slotKey) return;
-          var imgs = getImages();
-          imgs[pickerState.slotKey] = photo.large || photo.src;
-          setImages(imgs);
-          closePexelsPicker();
-          renderImageSlots();
-          flash('Imagem do Pexels aplicada!', 'success');
-        });
-      });
-    } catch (err) {
-      results.innerHTML = '<p style="color:var(--color-error)">' + esc(err.message) + '</p>';
+  function onSlotAction(e) {
+    var card = e.target.closest('.slot-card');
+    if (!card) return;
+    var key = card.getAttribute('data-key');
+    var action = e.target.getAttribute('data-slot-action');
+    if (action === 'reset') {
+      fetchJson(API + '/content/slots/' + encodeURIComponent(key), { method: 'DELETE' })
+        .then(function () { delete st.slots[key]; renderSlots(); setStatus('Mídia removida.', 'success'); });
+    } else if (action === 'toggle-featured') {
+      var cur = st.slots[key];
+      if (!cur) { e.target.checked = false; setStatus('Defina uma mídia primeiro.', 'error'); return; }
+      saveSlot(key, cur.kind, cur.src, cur.caption || '', !!e.target.checked);
+    } else if (action === 'upload') {
+      pickFileForSlot(key);
+    } else if (action === 'pick-library') {
+      openLibraryFor(key);
+    } else if (action === 'pick-pexels') {
+      openPexelsFor(key);
     }
   }
 
-  // ---------- Curadoria da galeria pública ----------
-  var galleryState = { results: [], selected: {} };
-
-  function renderGalleryCuration() {
-    var presetsBar = document.getElementById('gallery-presets');
-    if (presetsBar) {
-      presetsBar.innerHTML = PEXELS_PRESETS.map(function (p, i) {
-        return '<button type="button" data-i="' + i + '">' + esc(p.label) + '</button>';
-      }).join('');
-      presetsBar.querySelectorAll('button').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var idx = parseInt(btn.getAttribute('data-i'), 10);
-          document.getElementById('gallery-query').value = PEXELS_PRESETS[idx].query;
-          runGallerySearch();
-        });
-      });
-    }
-    renderGalleryCurrent();
+  function saveSlot(key, kind, src, caption, featured) {
+    return fetchJson(API + '/content/slots/' + encodeURIComponent(key), {
+      method: 'PUT',
+      body: JSON.stringify({ kind: kind, src: src, caption: caption || '', featured: !!featured }),
+    }).then(function () {
+      st.slots[key] = { kind: kind, src: src, caption: caption || '', featured: !!featured };
+      renderSlots();
+      setStatus('Mídia atualizada.', 'success');
+    });
   }
 
-  function renderGalleryCurrent() {
-    var box = document.getElementById('gallery-current');
-    if (!box) return;
-    var stored = getJSON(GALLERY_KEY, null);
-    var usingDefault = !stored || !stored.length;
-    var items = usingDefault ? (window.JB_DEFAULT_GALLERY || []) : stored;
-    var heading = usingDefault
-      ? '<p style="color:var(--color-muted);font-size:0.9rem;">Exibindo a <strong>galeria padrão</strong> (curadoria Pexels). Adicione fotos abaixo para criar sua própria seleção.</p>'
-      : '';
-    if (!items.length) {
-      box.innerHTML = heading + '<p style="color:var(--color-muted)">A galeria pública está vazia.</p>';
+  function pickFileForSlot(key) {
+    var inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'image/*,video/*';
+    inp.onchange = function () {
+      if (!inp.files || !inp.files[0]) return;
+      var fd = new FormData(); fd.append('file', inp.files[0]);
+      setStatus('Enviando…');
+      fetchJson(API + '/uploads', { method: 'POST', body: fd })
+        .then(function (r) { return saveSlot(key, r.kind, r.url, '', false); })
+        .then(function () { return fetchJson(API + '/uploads'); })
+        .then(function (r) { st.uploads = r.files || []; renderLibrary(); })
+        .catch(function () { setStatus('Falha no upload.', 'error'); });
+    };
+    inp.click();
+  }
+
+  // -------------------------------------------------------------------------
+  // Biblioteca (uploads + jubalbinodeoliveira/)
+  // -------------------------------------------------------------------------
+  function renderLibrary() {
+    var host = $('#library-list');
+    if (!host) return;
+    var list = [].concat(
+      st.uploads.map(function (f) { return Object.assign({ source: 'upload' }, f); }),
+      st.localMedia.map(function (f) { return Object.assign({ source: 'local' }, f); })
+    );
+    if (!list.length) {
+      host.innerHTML = '<p class="hint">Nenhuma mídia ainda. Envie fotos/vídeos ou adicione arquivos em <code>jubalbinodeoliveira/</code>.</p>';
       return;
     }
-    var clearBtn = usingDefault
-      ? ''
-      : '<button type="button" id="gallery-clear" class="btn btn-outline" style="margin-left:0.5rem;">Voltar à galeria padrão</button>';
-    box.innerHTML = heading +
-      '<p><strong>' + items.length + '</strong> foto(s)' + (usingDefault ? '' : ' selecionadas por você') + '. ' + clearBtn + '</p>' +
-      '<div class="pexels-results">' + items.map(function (it, i) {
-        return '<div class="pexels-result"' + (usingDefault ? '' : ' data-remove="' + i + '"') + '>' +
-          '<img src="' + esc(it.thumb || it.src) + '" alt="' + esc(it.alt) + '">' +
-          '<div class="credit">' + esc(it.photographer) + (usingDefault ? '' : ' · clique p/ remover') + '</div>' +
-          '</div>';
-      }).join('') + '</div>';
-    var btn = box.querySelector('#gallery-clear');
-    if (btn) btn.addEventListener('click', function () {
-      if (confirm('Remover sua seleção e voltar à galeria padrão?')) {
-        localStorage.removeItem(GALLERY_KEY);
-        renderGalleryCurrent();
-      }
-    });
-    box.querySelectorAll('.pexels-result[data-remove]').forEach(function (el) {
-      el.addEventListener('click', function () {
-        var i = parseInt(el.getAttribute('data-remove'), 10);
-        var arr = getGallery();
-        arr.splice(i, 1);
-        setGallery(arr);
-        renderGalleryCurrent();
+    host.innerHTML = list.map(function (m) {
+      var thumb = m.kind === 'video'
+        ? '<video src="' + esc(m.url) + '" muted></video>'
+        : '<img src="' + esc(m.url) + '" alt="">';
+      return '<figure class="lib-card" data-url="' + esc(m.url) + '" data-kind="' + esc(m.kind) + '" data-source="' + esc(m.source) + '" data-name="' + esc(m.name) + '">' +
+        thumb +
+        '<figcaption>' +
+          '<small>' + esc(m.source === 'local' ? 'jubalbinodeoliveira' : 'upload') + (m.featured ? ' · destaque' : '') + '</small>' +
+          '<span>' + esc(m.name) + '</span>' +
+          (m.source === 'upload'
+            ? '<button type="button" class="btn-link danger" data-lib-action="delete">excluir</button>'
+            : '') +
+        '</figcaption></figure>';
+    }).join('');
+    $$('.lib-card', host).forEach(function (card) {
+      card.addEventListener('click', function (ev) {
+        var act = ev.target.getAttribute('data-lib-action');
+        if (act === 'delete') {
+          ev.stopPropagation();
+          var name = card.getAttribute('data-name');
+          if (!confirm('Excluir ' + name + '?')) return;
+          fetchJson(API + '/uploads/' + encodeURIComponent(name), { method: 'DELETE' })
+            .then(function () { return fetchJson(API + '/uploads'); })
+            .then(function (r) { st.uploads = r.files || []; renderLibrary(); });
+          return;
+        }
+        // clicar no card => se houver slot pendente, atribui
+        if (st._pendingSlot) {
+          var url = card.getAttribute('data-url');
+          var kind = card.getAttribute('data-kind');
+          saveSlot(st._pendingSlot, kind, url, '', false);
+          closePicker();
+        }
       });
     });
   }
 
-  async function runGallerySearch() {
-    var q = document.getElementById('gallery-query').value.trim();
+  function bindLibraryUpload() {
+    var inp = $('#library-upload');
+    if (!inp) return;
+    inp.addEventListener('change', function () {
+      if (!inp.files || !inp.files.length) return;
+      var files = Array.prototype.slice.call(inp.files);
+      setStatus('Enviando ' + files.length + ' arquivo(s)…');
+      Promise.all(files.map(function (f) {
+        var fd = new FormData(); fd.append('file', f);
+        return fetchJson(API + '/uploads', { method: 'POST', body: fd });
+      })).then(function () {
+        return fetchJson(API + '/uploads');
+      }).then(function (r) {
+        st.uploads = r.files || []; renderLibrary();
+        setStatus('Upload concluído.', 'success'); inp.value = '';
+      }).catch(function () { setStatus('Falha no upload.', 'error'); });
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Picker (modal) p/ slot escolher da biblioteca ou Pexels
+  // -------------------------------------------------------------------------
+  function openLibraryFor(key) {
+    st._pendingSlot = key;
+    var picker = $('#picker'); if (!picker) return;
+    $('#picker-title').textContent = 'Escolher mídia para ' + key;
+    $('#picker-tabs').innerHTML = '';
+    $('#picker-results').innerHTML = '';
+    fetchJson(API + '/local-media').then(function (r) {
+      st.localMedia = r.files || [];
+      // mostra biblioteca
+      $('#picker-results').innerHTML = renderPickerLibrary();
+      bindPickerLibraryClicks();
+    });
+    picker.classList.add('open');
+  }
+  function renderPickerLibrary() {
+    var list = [].concat(
+      st.uploads.map(function (f) { return Object.assign({ source: 'upload' }, f); }),
+      st.localMedia.map(function (f) { return Object.assign({ source: 'local' }, f); })
+    );
+    if (!list.length) return '<p class="hint">Nenhuma mídia disponível ainda.</p>';
+    return '<div class="picker-grid">' + list.map(function (m) {
+      var thumb = m.kind === 'video'
+        ? '<video src="' + esc(m.url) + '" muted></video>'
+        : '<img src="' + esc(m.url) + '" alt="">';
+      return '<figure class="pick-card" data-url="' + esc(m.url) + '" data-kind="' + esc(m.kind) + '">' +
+        thumb + '<figcaption>' + esc(m.name) + '</figcaption></figure>';
+    }).join('') + '</div>';
+  }
+  function bindPickerLibraryClicks() {
+    $$('#picker-results .pick-card').forEach(function (c) {
+      c.addEventListener('click', function () {
+        if (!st._pendingSlot) return;
+        saveSlot(st._pendingSlot, c.getAttribute('data-kind'), c.getAttribute('data-url'), '', false)
+          .then(closePicker);
+      });
+    });
+  }
+  function openPexelsFor(key) {
+    st._pendingSlot = key;
+    var picker = $('#picker'); if (!picker) return;
+    $('#picker-title').textContent = 'Buscar no Pexels para ' + key;
+    $('#picker-results').innerHTML =
+      '<div class="pexels-bar">' +
+        '<input type="text" id="picker-q" placeholder="Ex: paris fashion week">' +
+        '<button class="btn" id="picker-q-go" type="button">Buscar</button>' +
+      '</div>' +
+      '<div class="pexels-presets">' +
+        ['paris fashion week street style', 'milan fashion week', 'new york street style',
+         'autumn fashion woman', 'fashion young adults'].map(function (p) {
+          return '<button class="btn btn-outline pexels-preset" type="button">' + esc(p) + '</button>';
+        }).join('') +
+      '</div>' +
+      '<div id="picker-pexels-results"></div>';
+    $('#picker-q-go').addEventListener('click', function () {
+      runPexels($('#picker-q').value);
+    });
+    $$('.pexels-preset').forEach(function (b) {
+      b.addEventListener('click', function () { runPexels(b.textContent); });
+    });
+    picker.classList.add('open');
+  }
+  function runPexels(query) {
+    var q = String(query || '').trim();
     if (!q) return;
-    var box = document.getElementById('gallery-results');
-    box.innerHTML = '<p style="color:var(--color-muted)">Buscando…</p>';
-    try {
-      var photos = await searchPexels(q, 18);
-      galleryState.results = photos;
-      box.innerHTML = '<p style="color:var(--color-muted);font-size:0.9rem;">' +
-          'Clique para selecionar/desmarcar. Depois clique em <em>Adicionar selecionadas</em>.</p>' +
-        '<div class="pexels-results">' + photos.map(function (p, i) {
-          return '<div class="pexels-result" data-i="' + i + '">' +
-            '<img src="' + esc(p.thumb) + '" alt="' + esc(p.alt) + '">' +
-            '<div class="credit">' + esc(p.photographer) + '</div>' +
-            '</div>';
-        }).join('') + '</div>' +
-        '<div style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;">' +
-          '<button type="button" id="gallery-add" class="btn">Adicionar selecionadas à galeria</button>' +
-        '</div>';
-      galleryState.selected = {};
-      box.querySelectorAll('.pexels-result').forEach(function (el) {
-        el.addEventListener('click', function () {
-          var i = parseInt(el.getAttribute('data-i'), 10);
-          if (galleryState.selected[i]) {
-            delete galleryState.selected[i];
-            el.classList.remove('selected');
-          } else {
-            galleryState.selected[i] = true;
-            el.classList.add('selected');
-          }
+    var out = $('#picker-pexels-results');
+    out.innerHTML = '<p class="hint">Buscando…</p>';
+    fetchJson(API + '/pexels/search?q=' + encodeURIComponent(q) + '&per_page=24').then(function (r) {
+      var photos = (r && r.photos) || [];
+      if (!photos.length) { out.innerHTML = '<p class="hint">Sem resultados.</p>'; return; }
+      out.innerHTML = '<div class="picker-grid">' + photos.map(function (p) {
+        return '<figure class="pick-card" data-url="' + esc(p.src.large2x || p.src.large) +
+          '" data-kind="image" data-photographer="' + esc(p.photographer) +
+          '" data-pageurl="' + esc(p.url) + '" data-alt="' + esc(p.alt || 'Foto Pexels') + '">' +
+          '<img src="' + esc(p.src.medium) + '" alt="' + esc(p.alt || '') + '">' +
+          '<figcaption>' + esc(p.photographer) + '</figcaption></figure>';
+      }).join('') + '</div>';
+      $$('.pick-card', out).forEach(function (c) {
+        c.addEventListener('click', function () {
+          if (!st._pendingSlot) return;
+          saveSlot(st._pendingSlot, 'image', c.getAttribute('data-url'),
+            c.getAttribute('data-photographer') + ' · Pexels', false).then(closePicker);
         });
       });
-      box.querySelector('#gallery-add').addEventListener('click', function () {
-        var keys = Object.keys(galleryState.selected);
-        if (!keys.length) { alert('Selecione pelo menos uma foto.'); return; }
-        var current = getGallery();
-        keys.forEach(function (k) {
-          var p = galleryState.results[parseInt(k, 10)];
-          if (p) current.push({
-            src: p.large || p.src, thumb: p.thumb,
-            url: p.url, photographer: p.photographer, alt: p.alt
-          });
-        });
-        setGallery(current);
-        flash('Adicionadas ' + keys.length + ' foto(s) à galeria pública.', 'success');
-        renderGalleryCurrent();
-      });
-    } catch (err) {
-      box.innerHTML = '<p style="color:var(--color-error)">' + esc(err.message) + '</p>';
+    }).catch(function (err) {
+      out.innerHTML = err && err.message === 'pexels_not_configured'
+        ? '<p class="hint">Configure PEXELS_API_KEY no servidor para usar a busca.</p>'
+        : '<p class="hint">Falha na busca.</p>';
+    });
+  }
+  function closePicker() {
+    var p = $('#picker'); if (p) p.classList.remove('open');
+    st._pendingSlot = null;
+  }
+  function bindPicker() {
+    var p = $('#picker'); if (!p) return;
+    p.addEventListener('click', function (e) {
+      if (e.target.dataset && e.target.dataset.close) closePicker();
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Galeria pública (curadoria Pexels)
+  // -------------------------------------------------------------------------
+  function bindGallery() {
+    var btn = $('#gallery-search'); if (!btn) return;
+    btn.addEventListener('click', function () { runGalleryQuery($('#gallery-query').value); });
+    $$('#gallery-presets .pexels-preset').forEach(function (b) {
+      b.addEventListener('click', function () { runGalleryQuery(b.textContent); });
+    });
+    $('#gallery-save').addEventListener('click', saveGallery);
+    refreshGallery();
+  }
+  function refreshGallery() {
+    fetchJson(API + '/content/gallery').then(function (r) {
+      renderCurrentGallery(r.items || []);
+    });
+  }
+  function renderCurrentGallery(items) {
+    var host = $('#gallery-current');
+    if (!items.length) {
+      host.innerHTML = '<p class="hint">Galeria vazia. Busque no Pexels e adicione fotos abaixo.</p>';
+      return;
     }
-  }
-
-  // ---------- Tabs ----------
-  function setupTabs() {
-    document.querySelectorAll('.admin-tab').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var target = btn.getAttribute('data-tab');
-        document.querySelectorAll('.admin-tab').forEach(function (b) { b.classList.toggle('active', b === btn); });
-        document.querySelectorAll('.admin-panel').forEach(function (p) {
-          p.classList.toggle('active', p.id === 'panel-' + target);
-        });
+    host.innerHTML = '<div class="gallery-grid">' + items.map(function (it, i) {
+      return '<figure class="gallery-item" data-i="' + i + '">' +
+        '<img src="' + esc(it.thumb || it.src) + '" alt="' + esc(it.alt || '') + '">' +
+        '<figcaption>' + esc(it.photographer || '') + '</figcaption>' +
+        '<button class="btn-link danger" data-i="' + i + '" type="button">remover</button>' +
+      '</figure>';
+    }).join('') + '</div>';
+    host.dataset.items = JSON.stringify(items);
+    $$('.btn-link.danger[data-i]', host).forEach(function (b) {
+      b.addEventListener('click', function () {
+        var arr = JSON.parse(host.dataset.items || '[]');
+        arr.splice(parseInt(b.getAttribute('data-i'), 10), 1);
+        renderCurrentGallery(arr);
       });
     });
   }
+  function runGalleryQuery(q) {
+    q = String(q || '').trim(); if (!q) return;
+    var out = $('#gallery-results');
+    out.innerHTML = '<p class="hint">Buscando…</p>';
+    fetchJson(API + '/pexels/search?q=' + encodeURIComponent(q) + '&per_page=24').then(function (r) {
+      var photos = (r && r.photos) || [];
+      out.innerHTML = '<div class="picker-grid">' + photos.map(function (p) {
+        return '<figure class="pick-card" data-payload=\'' +
+          esc(JSON.stringify({
+            id: 'p' + p.id,
+            src: p.src.large2x || p.src.large,
+            thumb: p.src.medium,
+            url: p.url,
+            photographer: p.photographer,
+            alt: p.alt || 'Foto Pexels',
+          })) + '\'>' +
+          '<img src="' + esc(p.src.medium) + '" alt="">' +
+          '<figcaption>' + esc(p.photographer) + '</figcaption></figure>';
+      }).join('') + '</div>';
+      $$('.pick-card', out).forEach(function (c) {
+        c.addEventListener('click', function () {
+          var host = $('#gallery-current');
+          var arr = host.dataset.items ? JSON.parse(host.dataset.items) : [];
+          arr.push(JSON.parse(c.getAttribute('data-payload')));
+          renderCurrentGallery(arr);
+        });
+      });
+    }).catch(function () { out.innerHTML = '<p class="hint">Falha na busca.</p>'; });
+  }
+  function saveGallery() {
+    var host = $('#gallery-current');
+    var items = host.dataset.items ? JSON.parse(host.dataset.items) : [];
+    fetchJson(API + '/content/gallery', {
+      method: 'PUT', body: JSON.stringify({ items: items }),
+    }).then(function () { setStatus('Galeria salva (' + items.length + ').', 'success'); })
+      .catch(function () { setStatus('Falha ao salvar a galeria.', 'error'); });
+  }
 
-  // ---------- bootstrap ----------
-  document.addEventListener('DOMContentLoaded', async function () {
-    if (!document.getElementById('login-section')) return; // não é a página admin
-    await ensureDefaultPassword();
-
-    document.getElementById('login-form').addEventListener('submit', handleLogin);
-    document.getElementById('btn-logout').addEventListener('click', handleLogout);
-    document.getElementById('btn-change-password').addEventListener('click', handleChangePassword);
-
-    setupTabs();
-
-    // Pexels picker controls
-    document.getElementById('pexels-picker-search').addEventListener('click', runPexelsPickerSearch);
-    document.getElementById('pexels-picker-query').addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') { e.preventDefault(); runPexelsPickerSearch(); }
+  // -------------------------------------------------------------------------
+  // Inscrições
+  // -------------------------------------------------------------------------
+  function loadSubmissions() {
+    return fetchJson(API + '/submissions').then(function (r) {
+      var items = r.items || [];
+      $('#submissions-count').textContent = items.length;
+      var host = $('#submissions-container');
+      if (!items.length) {
+        host.innerHTML = '<div class="empty-state"><h3>Nenhuma inscrição ainda</h3></div>';
+        return;
+      }
+      host.innerHTML = '<div class="table-wrapper"><table class="submissions">' +
+        '<thead><tr><th>Data</th><th>Nome</th><th>E-mail</th><th>Idade</th><th>Cidade</th><th>Interesses</th><th>Mensagem</th><th>News.</th></tr></thead>' +
+        '<tbody>' + items.map(function (s) {
+          return '<tr>' +
+            '<td>' + esc(s.created_at) + '</td>' +
+            '<td>' + esc(s.nome) + '</td>' +
+            '<td>' + esc(s.email) + '</td>' +
+            '<td>' + esc(s.idade != null ? s.idade : '—') + '</td>' +
+            '<td>' + esc(s.cidade || '—') + '</td>' +
+            '<td>' + esc(s.interesses || '—') + '</td>' +
+            '<td>' + esc(s.mensagem || '—') + '</td>' +
+            '<td>' + (s.newsletter ? 'Sim' : 'Não') + '</td>' +
+          '</tr>';
+        }).join('') + '</tbody></table></div>';
     });
-    document.getElementById('pexels-picker-close').addEventListener('click', closePexelsPicker);
-
-    // Galeria pública
-    var gs = document.getElementById('gallery-search');
-    if (gs) gs.addEventListener('click', runGallerySearch);
-    var gq = document.getElementById('gallery-query');
-    if (gq) gq.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') { e.preventDefault(); runGallerySearch(); }
+  }
+  function bindSubmissions() {
+    $('#btn-export').addEventListener('click', function () {
+      fetchJson(API + '/submissions').then(function (r) {
+        var blob = new Blob([JSON.stringify(r.items || [], null, 2)], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url; a.download = 'inscricoes-juliana-balbino.json';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
     });
-
-    // Salvar chave do Pexels manualmente
-    document.getElementById('pexels-key-save').addEventListener('click', function () {
-      var v = document.getElementById('pexels-key').value.trim();
-      if (!v) { alert('Cole a sua chave do Pexels.'); return; }
-      localStorage.setItem(PEXELS_KEY, v);
-      flash('Chave do Pexels salva no navegador.', 'success');
+    $('#btn-clear').addEventListener('click', function () {
+      if (!confirm('Apagar TODAS as inscrições?')) return;
+      fetchJson(API + '/submissions', { method: 'DELETE' }).then(loadSubmissions);
     });
+  }
 
-    if (isLoggedIn()) showAdmin();
-    else showLogin();
+  // -------------------------------------------------------------------------
+  // Bootstrap
+  // -------------------------------------------------------------------------
+  document.addEventListener('DOMContentLoaded', function () {
+    document.body.classList.add('admin-page');
+    bindLogin();
+    bindLogout();
+    bindTabs();
+    bindProfile();
+    bindLibraryUpload();
+    bindPicker();
+    bindGallery();
+    bindSubmissions();
+
+    fetchJson(API + '/auth/me').then(function (r) {
+      st.me = r.user;
+      showAdmin();
+      loadAll();
+      loadSubmissions();
+    }).catch(function () { showLogin(); });
   });
 })();
