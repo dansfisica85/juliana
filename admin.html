@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Dancing+Script:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -19,158 +19,155 @@
       </a>
       <ul class="nav-links">
         <li><a href="index.html">Início</a></li>
-        <li><a href="contato.html">Formulário</a></li>
-        <li><a href="admin.html">Painel</a></li>
+        <li><a href="moda.html">Moda</a></li>
+        <li><a href="bem-estar.html">Bem-estar</a></li>
+        <li><a href="qualidade-vida.html">Qualidade de Vida</a></li>
+        <li><a href="contato.html">Contato</a></li>
       </ul>
     </div>
   </header>
 
   <main>
-    <!-- ============ LOGIN ============ -->
+    <!-- LOGIN -->
     <section id="login-section" class="container">
       <div class="login-card">
         <h2>Acesso restrito</h2>
-        <p class="hint">Entre com sua senha para gerenciar fotos e inscrições.</p>
+        <p class="hint">Apenas a proprietária do site precisa entrar aqui.</p>
         <form id="login-form" autocomplete="off">
-          <div class="form-group">
-            <label for="login-password">Senha</label>
-            <input type="password" id="login-password" required autocomplete="current-password">
-          </div>
-          <div class="form-actions">
-            <button class="btn" type="submit">Entrar</button>
-          </div>
+          <label>Login<input type="text" name="username" autocomplete="username" required></label>
+          <label>Senha<input type="password" name="password" autocomplete="current-password" required></label>
+          <button class="btn" type="submit">Entrar</button>
           <div id="login-message" class="admin-status"></div>
         </form>
-        <p class="hint" style="margin-top:1rem;">
-          Senha padrão inicial: <code>juliana2026</code><br>
-          Altere assim que fizer o primeiro acesso.
-        </p>
       </div>
     </section>
 
-    <!-- ============ ADMIN ============ -->
+    <!-- ADMIN -->
     <section id="admin-section" class="section container" style="display:none;">
-      <div class="logout-bar">
-        <button type="button" id="btn-change-password" class="btn btn-outline" style="margin-right:0.5rem;">Trocar senha</button>
-        <button type="button" id="btn-logout" class="btn">Sair</button>
+      <div class="admin-header">
+        <h2 style="margin:0;">Painel</h2>
+        <span class="who">Conectada como <strong id="admin-username">—</strong></span>
+        <div style="margin-left:auto;">
+          <button type="button" id="btn-logout" class="btn btn-outline">Sair</button>
+        </div>
       </div>
 
       <div class="admin-tabs" role="tablist">
-        <button class="admin-tab active" data-tab="images" type="button">📸 Fotos do site</button>
+        <button class="admin-tab active" data-tab="cards" type="button">🖼️ Cards do site</button>
+        <button class="admin-tab" data-tab="library" type="button">📚 Biblioteca</button>
         <button class="admin-tab" data-tab="gallery" type="button">🌆 Galeria Pexels</button>
         <button class="admin-tab" data-tab="submissions" type="button">📬 Inscrições</button>
-        <button class="admin-tab" data-tab="settings" type="button">⚙️ Configurações</button>
+        <button class="admin-tab" data-tab="profile" type="button">👤 Perfil</button>
       </div>
 
       <div id="admin-status" class="admin-status"></div>
 
-      <!-- ===== Painel: imagens ===== -->
-      <div id="panel-images" class="admin-panel active">
-        <div class="section-title"><h2>Substituir imagens do site</h2></div>
-        <p style="color:var(--color-muted);max-width:780px;">
-          Para cada espaço do site abaixo, você pode <strong>enviar uma foto sua</strong> ou
-          <strong>buscar uma imagem gratuita no Pexels</strong>. As alterações ficam salvas neste
-          navegador (localStorage) e aparecem imediatamente em todas as páginas.
-        </p>
-        <div id="image-slots" class="image-slots"></div>
+      <!-- Cards -->
+      <div id="panel-cards" class="admin-panel active">
+        <div class="section-title"><h2>Substituir foto/vídeo de qualquer card</h2></div>
+        <p class="hint">Clique em <em>Escolher da biblioteca</em>, <em>Buscar no Pexels</em> ou <em>Enviar arquivo</em> para trocar a mídia de cada slot. Marque <strong>Destaque</strong> em fotos com roupas escuras para realçá-las no site.</p>
+        <div id="image-slots"></div>
       </div>
 
-      <!-- ===== Painel: galeria pública (Pexels) ===== -->
+      <!-- Biblioteca -->
+      <div id="panel-library" class="admin-panel">
+        <div class="section-title"><h2>Biblioteca de mídia</h2></div>
+        <p class="hint">Mostra os arquivos enviados pelo painel e os arquivos da pasta <code>jubalbinodeoliveira/</code> (vídeos viram fundo silencioso e em loop nos cards).</p>
+        <div class="lib-toolbar">
+          <label class="btn">
+            Enviar fotos/vídeos
+            <input type="file" id="library-upload" accept="image/*,video/*" multiple style="display:none;">
+          </label>
+        </div>
+        <div id="library-list" class="lib-grid"></div>
+      </div>
+
+      <!-- Galeria -->
       <div id="panel-gallery" class="admin-panel">
         <div class="section-title"><h2>Curar galeria pública (Pexels)</h2></div>
-        <p style="color:var(--color-muted);max-width:780px;">
-          Monte uma galeria com fotos gratuitas do Pexels — moda de Milão, Paris, Nova York,
-          jovens fashion, lugares fashion etc. As fotos selecionadas aparecem na página
-          <a href="moda.html">Moda</a> para todas as visitantes.
-        </p>
-
+        <p class="hint">Monte uma curadoria de fotos gratuitas — moda de Milão, Paris, Nova York, jovens fashion, lugares fashion etc. Aparece na página <a href="moda.html">Moda</a>.</p>
         <div class="pexels-bar">
           <input type="text" id="gallery-query" placeholder="Ex: paris fashion week street style">
           <button type="button" id="gallery-search" class="btn">Buscar no Pexels</button>
         </div>
-        <div class="pexels-presets" id="gallery-presets"></div>
-
-        <div id="gallery-results"></div>
-
+        <div class="pexels-presets" id="gallery-presets">
+          <button class="btn btn-outline pexels-preset" type="button">paris fashion week street style</button>
+          <button class="btn btn-outline pexels-preset" type="button">milan fashion week</button>
+          <button class="btn btn-outline pexels-preset" type="button">new york street style</button>
+          <button class="btn btn-outline pexels-preset" type="button">autumn fashion woman</button>
+          <button class="btn btn-outline pexels-preset" type="button">fashion young adults</button>
+        </div>
+        <div id="gallery-results" style="margin-top:1rem;"></div>
         <hr style="margin:2rem 0;border:none;border-top:1px solid var(--color-border);">
-        <h3>Galeria pública atual</h3>
+        <h3>Galeria atual</h3>
         <div id="gallery-current"></div>
+        <div style="margin-top:1rem;">
+          <button id="gallery-save" class="btn" type="button">Salvar galeria</button>
+        </div>
       </div>
 
-      <!-- ===== Painel: inscrições ===== -->
+      <!-- Inscrições -->
       <div id="panel-submissions" class="admin-panel">
         <div class="section-title"><h2>Inscrições recebidas</h2></div>
-        <p class="text-center" style="color:var(--color-muted);">
-          Total: <strong id="submissions-count">0</strong>
-        </p>
-        <div class="admin-toolbar">
-          <a href="contato.html" class="btn btn-outline">+ Nova inscrição</a>
-          <div>
-            <button id="btn-export" class="btn btn-outline" type="button">Exportar JSON</button>
-            <button id="btn-clear" class="btn" type="button" style="background:var(--color-error);">Apagar tudo</button>
-          </div>
+        <p>Total: <strong id="submissions-count">0</strong></p>
+        <div class="admin-toolbar" style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+          <button id="btn-export" class="btn btn-outline" type="button">Exportar JSON</button>
+          <button id="btn-clear" class="btn" type="button" style="background:var(--color-error);">Apagar tudo</button>
         </div>
         <div id="submissions-container"></div>
       </div>
 
-      <!-- ===== Painel: configurações ===== -->
-      <div id="panel-settings" class="admin-panel">
-        <div class="section-title"><h2>Configurações</h2></div>
-
-        <div class="form-wrapper" style="margin-top:0;">
-          <h3>Chave de API do Pexels</h3>
-          <p style="color:var(--color-muted);font-size:0.9rem;">
-            O Pexels oferece imagens gratuitas. Crie sua chave em
-            <a href="https://www.pexels.com/api/" target="_blank" rel="noopener">pexels.com/api</a>
-            (gratuito, basta criar uma conta) e cole abaixo. A chave fica salva apenas neste navegador.
-          </p>
-          <div class="form-group">
-            <label for="pexels-key">Sua chave Pexels</label>
-            <input type="text" id="pexels-key" placeholder="cole aqui a chave" autocomplete="off">
+      <!-- Perfil -->
+      <div id="panel-profile" class="admin-panel">
+        <div class="section-title"><h2>Perfil do administrador</h2></div>
+        <p class="hint">Você pode trocar o login e/ou a senha quantas vezes quiser. Para confirmar qualquer alteração, informe a senha atual.</p>
+        <form id="profile-form" class="profile-card" autocomplete="off">
+          <label>Login (atual ou novo)
+            <input type="text" name="newUsername" id="profile-username" required>
+          </label>
+          <label>Nova senha (deixe em branco para manter)
+            <input type="password" name="newPassword" autocomplete="new-password">
+          </label>
+          <label>Senha atual <span style="color:var(--color-error);">*</span>
+            <input type="password" name="currentPassword" autocomplete="current-password" required>
+          </label>
+          <div style="margin-top:1rem;">
+            <button class="btn" type="submit">Salvar alterações</button>
           </div>
-          <div class="form-actions">
-            <button type="button" id="pexels-key-save" class="btn">Salvar chave</button>
-          </div>
-        </div>
-
-        <div class="form-wrapper">
-          <h3>Sobre o painel</h3>
-          <p style="color:var(--color-muted);font-size:0.9rem;">
-            Este site é estático (hospedado no GitHub Pages). Por isso, o login e os dados
-            (fotos, galeria, inscrições) ficam armazenados apenas no navegador onde você acessar.
-            Para uma autenticação real e armazenamento em servidor, é necessário um backend.
-          </p>
-        </div>
+        </form>
       </div>
     </section>
 
-    <!-- ============ Pexels picker (modal) ============ -->
-    <div id="pexels-picker" style="display:none;position:fixed;inset:0;background:rgba(58,38,32,0.6);z-index:1000;overflow:auto;padding:2rem 1rem;">
-      <div style="max-width:880px;margin:0 auto;background:var(--color-surface);border-radius:var(--radius);padding:1.5rem;box-shadow:var(--shadow-md);">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
-          <h3 id="pexels-picker-title" style="margin:0;">Buscar foto no Pexels</h3>
-          <button type="button" id="pexels-picker-close" class="btn btn-outline">Fechar</button>
+    <!-- Picker (modal) p/ slot -->
+    <div id="picker">
+      <div class="picker-backdrop" data-close="1"></div>
+      <div class="picker-card">
+        <div class="picker-head">
+          <h3 id="picker-title" style="margin:0;">Escolher mídia</h3>
+          <button class="btn btn-outline" type="button" data-close="1">Fechar</button>
         </div>
-        <div class="pexels-bar" style="margin-top:1rem;">
-          <input type="text" id="pexels-picker-query" placeholder="Ex: milan fashion week">
-          <button type="button" id="pexels-picker-search" class="btn">Buscar</button>
-        </div>
-        <div id="pexels-picker-results" style="margin-top:1rem;"></div>
+        <div id="picker-tabs"></div>
+        <div id="picker-results"></div>
       </div>
     </div>
   </main>
 
   <footer class="site-footer">
     <div class="container">
-      <div><h4>Juliana Balbino</h4><p>Painel administrativo do blog.</p></div>
-      <div><h4>Navegação</h4><p><a href="index.html">Início</a><br><a href="contato.html">Formulário</a><br><a href="admin.html">Painel</a></p></div>
+      <div><h4>Juliana Balbino</h4><p>Painel administrativo do site.</p></div>
     </div>
     <div class="copy">© <span id="year"></span> Juliana Balbino.</div>
   </footer>
 
-  <script src="js/pexels-defaults.js"></script>
-  <script src="js/main.js"></script>
-  <script src="js/form.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var y = document.getElementById('year');
+      if (y) y.textContent = new Date().getFullYear();
+      // pré-popula login do perfil quando o admin carrega
+      var orig = window.fetch;
+      // não precisamos de fetch wrapper; admin.js cuida disso
+    });
+  </script>
   <script src="js/admin.js"></script>
 </body>
 </html>
