@@ -2,19 +2,15 @@
 /**
  * Juliana Balbino — servidor Express + Turso/libSQL
  *
- * Funcionalidades:
- *  - Servir o site estático (HTML/CSS/JS/imagens da pasta /img e /jubalbinodeoliveira).
- *  - Autenticação real do administrador (cookie HTTP-only com JWT).
- *  - CRUD de "slots" de mídia (substituir foto/vídeo de qualquer card do site).
- *  - Upload de fotos e vídeos do admin.
- *  - Listagem das mídias locais da pasta jubalbinodeoliveira/.
- *  - Proxy autenticado para a API do Pexels (curadoria de imagens gratuitas).
- *  - Recebimento de inscrições do formulário de contato.
+ * Compatível com Vercel (serverless): uploads ficam armazenados no Turso como BLOB
+ * e são servidos via GET /uploads/:id. Em desenvolvimento local (npm start) o
+ * mesmo código sobe um servidor HTTP.
  *
- *  ATENÇÃO À SEGURANÇA:
- *  - Senhas são armazenadas com bcrypt.
- *  - JWT é assinado com JWT_SECRET (.env).
- *  - Token Turso e demais segredos NUNCA vão para o repositório.
+ * Segurança:
+ *  - Senhas com bcrypt (12 rounds).
+ *  - Sessão por cookie HTTP-only assinado com JWT_SECRET.
+ *  - Rate limit em login e em submissão do formulário.
+ *  - Uploads validados por mimetype, com limite de 25 MB.
  */
 'use strict';
 
@@ -36,24 +32,18 @@ const { createClient } = require('@libsql/client');
 // ---------------------------------------------------------------------------
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const NODE_ENV = process.env.NODE_ENV || 'development';
+const IS_VERCEL = !!process.env.VERCEL;
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(48).toString('hex');
 const ADMIN_INITIAL_USER = process.env.ADMIN_INITIAL_USER || 'JulianaAdmin';
 const ADMIN_INITIAL_PASSWORD = process.env.ADMIN_INITIAL_PASSWORD || 'ModaeBemEstar2026#';
 const PEXELS_API_KEY = process.env.PEXELS_API_KEY || '';
 
 if (!process.env.JWT_SECRET) {
-  console.warn('[aviso] JWT_SECRET não definido no .env — gerando um valor temporário (sessões serão invalidadas a cada restart).');
-}
-if (!process.env.TURSO_DATABASE_URL) {
-  console.warn('[aviso] TURSO_DATABASE_URL não definido — usando banco local SQLite "file:./local.db".');
+  console.warn('[aviso] JWT_SECRET não definido — sessões serão invalidadas a cada restart.');
 }
 
-const ROOT = __dirname;
-const UPLOADS_DIR = path.join(ROOT, 'uploads');
+const ROOT = path.resolve(__dirname);
 const LOCAL_MEDIA_DIR = path.join(ROOT, 'jubalbinodeoliveira');
-
-if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-if (!fs.existsSync(LOCAL_MEDIA_DIR)) fs.mkdirSync(LOCAL_MEDIA_DIR, { recursive: true });
 
 // ---------------------------------------------------------------------------
 // Banco — Turso (libSQL) ou fallback local
@@ -63,59 +53,69 @@ const db = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN || undefined,
 });
 
-async function initDb() {
-  await db.batch([
-    `CREATE TABLE IF NOT EXISTS admin_user (
-      id INTEGER PRIMARY KEY,
-      username TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )`,
-    `CREATE TABLE IF NOT EXISTS media_slots (
-      slot_key TEXT PRIMARY KEY,
-      kind TEXT NOT NULL DEFAULT 'image',
-      src TEXT NOT NULL,
-      caption TEXT,
-      featured INTEGER NOT NULL DEFAULT 0,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )`,
-    `CREATE TABLE IF NOT EXISTS gallery_items (
-      id TEXT PRIMARY KEY,
-      src TEXT NOT NULL,
-      thumb TEXT,
-      page_url TEXT,
-      photographer TEXT,
-      alt TEXT,
-      tag TEXT,
-      position INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )`,
-    `CREATE TABLE IF NOT EXISTS submissions (
-      id TEXT PRIMARY KEY,
-      nome TEXT NOT NULL,
-      email TEXT NOT NULL,
-      idade INTEGER,
-      cidade TEXT,
-      interesses TEXT,
-      mensagem TEXT,
-      newsletter INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )`,
-  ], 'write');
+let dbReady = null;
+function ensureDb() {
+  if (dbReady) return dbReady;
+  dbReady = (async () => {
+    await db.batch([
+      `CREATE TABLE IF NOT EXISTS admin_user (
+        id INTEGER PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      `CREATE TABLE IF NOT EXISTS media_slots (
+        slot_key TEXT PRIMARY KEY,
+        kind TEXT NOT NULL DEFAULT 'image',
+        src TEXT NOT NULL,
+        caption TEXT,
+        featured INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      `CREATE TABLE IF NOT EXISTS gallery_items (
+        id TEXT PRIMARY KEY,
+        src TEXT NOT NULL,
+        thumb TEXT,
+        page_url TEXT,
+        photographer TEXT,
+        alt TEXT,
+        tag TEXT,
+        position INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      `CREATE TABLE IF NOT EXISTS submissions (
+        id TEXT PRIMARY KEY,
+        nome TEXT NOT NULL,
+        email TEXT NOT NULL,
+        idade INTEGER,
+        cidade TEXT,
+        interesses TEXT,
+        mensagem TEXT,
+        newsletter INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      `CREATE TABLE IF NOT EXISTS uploads (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        mimetype TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        data BLOB NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+    ], 'write');
 
-  // cria admin inicial se não existir
-  const existing = await db.execute({
-    sql: 'SELECT id FROM admin_user LIMIT 1',
-    args: [],
-  });
-  if (existing.rows.length === 0) {
-    const hash = await bcrypt.hash(ADMIN_INITIAL_PASSWORD, 12);
-    await db.execute({
-      sql: 'INSERT INTO admin_user (username, password_hash) VALUES (?, ?)',
-      args: [ADMIN_INITIAL_USER, hash],
-    });
-    console.log(`[ok] Admin inicial criado: ${ADMIN_INITIAL_USER}`);
-  }
+    const existing = await db.execute('SELECT id FROM admin_user LIMIT 1');
+    if (existing.rows.length === 0) {
+      const hash = await bcrypt.hash(ADMIN_INITIAL_PASSWORD, 12);
+      await db.execute({
+        sql: 'INSERT INTO admin_user (username, password_hash) VALUES (?, ?)',
+        args: [ADMIN_INITIAL_USER, hash],
+      });
+      console.log(`[ok] Admin inicial criado: ${ADMIN_INITIAL_USER}`);
+    }
+  })().catch((err) => { dbReady = null; throw err; });
+  return dbReady;
 }
 
 // ---------------------------------------------------------------------------
@@ -128,18 +128,22 @@ app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: false, limit: '2mb' }));
 app.use(cookieParser());
 
-// Estáticos do site
-app.use(express.static(ROOT, {
-  index: 'index.html',
-  extensions: ['html'],
-  setHeaders(res, filePath) {
-    if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
-  },
-}));
+// Garante que o DB esteja inicializado em qualquer rota (frio em serverless).
+app.use(async (_req, _res, next) => {
+  try { await ensureDb(); next(); } catch (err) { next(err); }
+});
 
-// Estáticos para uploads e mídia local
-app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '7d' }));
-app.use('/jubalbinodeoliveira', express.static(LOCAL_MEDIA_DIR, { maxAge: '7d' }));
+// Estáticos quando rodando localmente (Vercel já serve a partir do filesystem).
+if (!IS_VERCEL) {
+  app.use(express.static(ROOT, {
+    index: 'index.html',
+    extensions: ['html'],
+    setHeaders(res, filePath) {
+      if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+    },
+  }));
+  app.use('/jubalbinodeoliveira', express.static(LOCAL_MEDIA_DIR, { maxAge: '7d' }));
+}
 
 // ---------------------------------------------------------------------------
 // Auth helpers
@@ -148,7 +152,7 @@ const COOKIE_NAME = 'jb_admin';
 const COOKIE_OPTS = {
   httpOnly: true,
   sameSite: 'lax',
-  secure: NODE_ENV === 'production',
+  secure: NODE_ENV === 'production' || IS_VERCEL,
   maxAge: 1000 * 60 * 60 * 8, // 8h
   path: '/',
 };
@@ -168,7 +172,6 @@ function authRequired(req, res, next) {
   }
 }
 
-// Limita tentativas de login (proteção contra brute-force)
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
@@ -177,25 +180,15 @@ const loginLimiter = rateLimit({
 });
 
 // ---------------------------------------------------------------------------
-// Multer (uploads)
+// Multer (uploads em memória — gravados depois no Turso)
 // ---------------------------------------------------------------------------
 const ALLOWED_MIME = new Set([
   'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif',
   'video/mp4', 'video/webm', 'video/quicktime',
 ]);
-
-const storage = multer.diskStorage({
-  destination(_req, _file, cb) { cb(null, UPLOADS_DIR); },
-  filename(_req, file, cb) {
-    const safeBase = file.originalname.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-60);
-    const stamp = Date.now().toString(36) + '-' + crypto.randomBytes(4).toString('hex');
-    cb(null, `${stamp}-${safeBase}`);
-  },
-});
-
 const upload = multer({
-  storage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB (limite seguro para serverless)
   fileFilter(_req, file, cb) {
     if (!ALLOWED_MIME.has(file.mimetype)) {
       return cb(new Error('Tipo de arquivo não permitido: ' + file.mimetype));
@@ -204,8 +197,12 @@ const upload = multer({
   },
 });
 
+function genId(len) {
+  return crypto.randomBytes(len || 8).toString('hex');
+}
+
 // ---------------------------------------------------------------------------
-// API
+// Rotas
 // ---------------------------------------------------------------------------
 const api = express.Router();
 
@@ -213,17 +210,14 @@ const api = express.Router();
 api.post('/auth/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'missing_fields' });
-
   const result = await db.execute({
     sql: 'SELECT id, username, password_hash FROM admin_user WHERE username = ? LIMIT 1',
     args: [String(username)],
   });
   const user = result.rows[0];
   if (!user) return res.status(401).json({ error: 'invalid_credentials' });
-
   const ok = await bcrypt.compare(String(password), String(user.password_hash));
   if (!ok) return res.status(401).json({ error: 'invalid_credentials' });
-
   const token = signToken({ id: user.id, username: user.username });
   res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
   res.json({ ok: true, user: { username: user.username } });
@@ -246,20 +240,16 @@ api.get('/auth/me', authRequired, async (req, res) => {
 api.put('/auth/profile', authRequired, async (req, res) => {
   const { newUsername, currentPassword, newPassword } = req.body || {};
   if (!currentPassword) return res.status(400).json({ error: 'missing_current_password' });
-
   const result = await db.execute({
     sql: 'SELECT id, username, password_hash FROM admin_user WHERE id = ? LIMIT 1',
     args: [req.admin.sub],
   });
   const user = result.rows[0];
   if (!user) return res.status(404).json({ error: 'not_found' });
-
   const ok = await bcrypt.compare(String(currentPassword), String(user.password_hash));
   if (!ok) return res.status(401).json({ error: 'invalid_current_password' });
-
   let nextUsername = user.username;
   let nextHash = user.password_hash;
-
   if (newUsername && String(newUsername).trim() !== user.username) {
     const u = String(newUsername).trim();
     if (!/^[A-Za-z0-9_.-]{3,40}$/.test(u)) return res.status(400).json({ error: 'invalid_username' });
@@ -269,28 +259,23 @@ api.put('/auth/profile', authRequired, async (req, res) => {
     if (String(newPassword).length < 8) return res.status(400).json({ error: 'weak_password' });
     nextHash = await bcrypt.hash(String(newPassword), 12);
   }
-
   await db.execute({
     sql: "UPDATE admin_user SET username = ?, password_hash = ?, updated_at = datetime('now') WHERE id = ?",
     args: [nextUsername, nextHash, user.id],
   });
-
-  // Reemite o cookie com o novo username
   const token = signToken({ id: user.id, username: nextUsername });
   res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
   res.json({ ok: true, user: { username: nextUsername } });
 });
 
-// ---- Slots de mídia (substituir foto/vídeo de qualquer card) -------------
+// ---- Slots ----------------------------------------------------------------
 api.get('/content/slots', async (_req, res) => {
   const result = await db.execute('SELECT slot_key, kind, src, caption, featured FROM media_slots');
   const slots = {};
   for (const row of result.rows) {
     slots[row.slot_key] = {
-      kind: row.kind,
-      src: row.src,
-      caption: row.caption || '',
-      featured: !!row.featured,
+      kind: row.kind, src: row.src,
+      caption: row.caption || '', featured: !!row.featured,
     };
   }
   res.json({ slots });
@@ -302,7 +287,6 @@ api.put('/content/slots/:key', authRequired, async (req, res) => {
   const { kind, src, caption, featured } = req.body || {};
   if (!src) return res.status(400).json({ error: 'missing_src' });
   const k = (kind === 'video') ? 'video' : 'image';
-
   await db.execute({
     sql: `INSERT INTO media_slots (slot_key, kind, src, caption, featured, updated_at)
           VALUES (?, ?, ?, ?, ?, datetime('now'))
@@ -322,7 +306,7 @@ api.delete('/content/slots/:key', authRequired, async (req, res) => {
   res.json({ ok: true });
 });
 
-// ---- Galeria pública (Pexels curado) -------------------------------------
+// ---- Galeria --------------------------------------------------------------
 api.get('/content/gallery', async (_req, res) => {
   const result = await db.execute(
     'SELECT id, src, thumb, page_url, photographer, alt, tag, position FROM gallery_items ORDER BY position ASC, created_at ASC'
@@ -333,7 +317,6 @@ api.get('/content/gallery', async (_req, res) => {
 api.put('/content/gallery', authRequired, async (req, res) => {
   const items = Array.isArray(req.body && req.body.items) ? req.body.items : null;
   if (!items) return res.status(400).json({ error: 'missing_items' });
-
   await db.execute('DELETE FROM gallery_items');
   let pos = 0;
   for (const it of items) {
@@ -357,52 +340,67 @@ api.put('/content/gallery', authRequired, async (req, res) => {
   res.json({ ok: true, count: pos });
 });
 
-// ---- Uploads --------------------------------------------------------------
-api.post('/uploads', authRequired, upload.single('file'), (req, res) => {
+// ---- Uploads (armazenados no Turso como BLOB) -----------------------------
+api.post('/uploads', authRequired, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'no_file' });
-  const url = '/uploads/' + req.file.filename;
+  const id = Date.now().toString(36) + '-' + genId(4);
   const kind = req.file.mimetype.startsWith('video/') ? 'video' : 'image';
-  res.json({ ok: true, url, kind, mimetype: req.file.mimetype, size: req.file.size });
+  await db.execute({
+    sql: `INSERT INTO uploads (id, name, mimetype, kind, size, data) VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [id, req.file.originalname.slice(-100), req.file.mimetype, kind, req.file.size, req.file.buffer],
+  });
+  res.json({ ok: true, url: '/uploads/' + id, kind, mimetype: req.file.mimetype, size: req.file.size });
 });
 
-api.get('/uploads', authRequired, (_req, res) => {
-  const files = fs.readdirSync(UPLOADS_DIR)
-    .filter(f => !f.startsWith('.'))
-    .map(f => {
-      const stat = fs.statSync(path.join(UPLOADS_DIR, f));
-      const ext = path.extname(f).toLowerCase();
-      const isVideo = ['.mp4', '.webm', '.mov'].includes(ext);
-      return {
-        name: f,
-        url: '/uploads/' + f,
-        kind: isVideo ? 'video' : 'image',
-        size: stat.size,
-        mtime: stat.mtimeMs,
-      };
-    })
-    .sort((a, b) => b.mtime - a.mtime);
+api.get('/uploads', authRequired, async (_req, res) => {
+  const r = await db.execute(
+    'SELECT id, name, mimetype, kind, size, created_at FROM uploads ORDER BY created_at DESC'
+  );
+  const files = r.rows.map((u) => ({
+    id: u.id, name: u.name, url: '/uploads/' + u.id,
+    kind: u.kind, mimetype: u.mimetype, size: u.size, mtime: u.created_at,
+  }));
   res.json({ files });
 });
 
-api.delete('/uploads/:name', authRequired, (req, res) => {
-  const name = path.basename(req.params.name);
-  const target = path.join(UPLOADS_DIR, name);
-  if (!target.startsWith(UPLOADS_DIR + path.sep)) return res.status(400).json({ error: 'invalid' });
-  if (fs.existsSync(target)) fs.unlinkSync(target);
+api.delete('/uploads/:id', authRequired, async (req, res) => {
+  await db.execute({ sql: 'DELETE FROM uploads WHERE id = ?', args: [String(req.params.id)] });
   res.json({ ok: true });
 });
+
+// GET /uploads/:id — stream do BLOB
+async function serveUpload(req, res) {
+  const id = String(req.params.id || req.params[0] || '').replace(/[^a-z0-9-]/gi, '');
+  if (!id) return res.status(400).end();
+  try {
+    await ensureDb();
+    const r = await db.execute({
+      sql: 'SELECT mimetype, data FROM uploads WHERE id = ? LIMIT 1',
+      args: [id],
+    });
+    if (r.rows.length === 0) return res.status(404).end();
+    const row = r.rows[0];
+    const buf = Buffer.isBuffer(row.data) ? row.data : Buffer.from(row.data);
+    res.setHeader('Content-Type', row.mimetype);
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    res.setHeader('Content-Length', buf.length);
+    res.end(buf);
+  } catch (e) {
+    res.status(500).end();
+  }
+}
+app.get('/uploads/:id', serveUpload);
 
 // ---- Mídia local (pasta jubalbinodeoliveira/) ----------------------------
 api.get('/local-media', (_req, res) => {
   if (!fs.existsSync(LOCAL_MEDIA_DIR)) return res.json({ files: [] });
   const files = fs.readdirSync(LOCAL_MEDIA_DIR)
-    .filter(f => !f.startsWith('.'))
+    .filter(f => !f.startsWith('.') && f.toLowerCase() !== 'readme.md')
     .map(f => {
       const ext = path.extname(f).toLowerCase();
       const isVideo = ['.mp4', '.webm', '.mov', '.m4v'].includes(ext);
       const isImage = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif'].includes(ext);
       if (!isVideo && !isImage) return null;
-      // heurística simples: nome contendo "preto", "dark", "noite", "escur" => destaque
       const lc = f.toLowerCase();
       const dark = /(preto|black|dark|escur|noite|night)/.test(lc);
       return {
@@ -428,14 +426,13 @@ api.get('/pexels/search', authRequired, async (req, res) => {
       { headers: { Authorization: PEXELS_API_KEY } }
     );
     if (!r.ok) return res.status(r.status).json({ error: 'pexels_error' });
-    const data = await r.json();
-    res.json(data);
+    res.json(await r.json());
   } catch (e) {
     res.status(502).json({ error: 'pexels_fetch_failed' });
   }
 });
 
-// ---- Submissões do formulário --------------------------------------------
+// ---- Submissões -----------------------------------------------------------
 const submitLimiter = rateLimit({ windowMs: 60 * 1000, max: 8 });
 
 api.post('/submissions', submitLimiter, async (req, res) => {
@@ -444,8 +441,7 @@ api.post('/submissions', submitLimiter, async (req, res) => {
   const email = String(b.email || '').trim().slice(0, 120);
   if (nome.length < 2) return res.status(400).json({ error: 'invalid_nome' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'invalid_email' });
-
-  const id = Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex');
+  const id = Date.now().toString(36) + '-' + genId(3);
   const interesses = Array.isArray(b.interesses) ? b.interesses.join(',') : String(b.interesses || '');
   await db.execute({
     sql: `INSERT INTO submissions (id, nome, email, idade, cidade, interesses, mensagem, newsletter)
@@ -480,31 +476,40 @@ api.use((err, _req, res, _next) => {
   if (err && err.message && /Tipo de arquivo/.test(err.message)) {
     return res.status(415).json({ error: err.message });
   }
+  if (err && err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ error: 'file_too_large' });
+  }
   res.status(500).json({ error: 'server_error' });
 });
 
 app.use('/api', api);
 
-// SPA-ish fallback: 404 para tudo que não é estático nem API
-app.use((req, res) => {
-  if (req.method === 'GET' && req.accepts('html')) {
-    return res.status(404).sendFile(path.join(ROOT, 'index.html'));
-  }
-  res.status(404).json({ error: 'not_found' });
-});
+// 404 — só ativo no modo standalone (no Vercel os estáticos vêm do CDN).
+if (!IS_VERCEL) {
+  app.use((req, res) => {
+    if (req.method === 'GET' && req.accepts('html')) {
+      return res.status(404).sendFile(path.join(ROOT, 'index.html'));
+    }
+    res.status(404).json({ error: 'not_found' });
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Bootstrap
 // ---------------------------------------------------------------------------
-initDb()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`✓ Juliana Balbino — servidor rodando em http://localhost:${PORT}`);
-      console.log(`  ambiente: ${NODE_ENV}`);
-      console.log(`  banco: ${process.env.TURSO_DATABASE_URL ? 'Turso/libSQL' : 'SQLite local (./local.db)'}`);
+if (!IS_VERCEL && require.main === module) {
+  ensureDb()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`✓ Juliana Balbino — http://localhost:${PORT} (${NODE_ENV})`);
+        console.log(`  banco: ${process.env.TURSO_DATABASE_URL ? 'Turso/libSQL' : 'SQLite local (./local.db)'}`);
+      });
+    })
+    .catch((err) => {
+      console.error('Falha ao inicializar o banco:', err);
+      process.exit(1);
     });
-  })
-  .catch((err) => {
-    console.error('Falha ao inicializar o banco de dados:', err);
-    process.exit(1);
-  });
+}
+
+module.exports = app;
+module.exports.default = app;

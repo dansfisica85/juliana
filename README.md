@@ -78,6 +78,8 @@ Coloque aqui as fotos/vídeos da Juliana. O servidor expõe esses arquivos em
 ```
 .
 ├── server.js                   # Express + Turso + Auth + Uploads + Pexels
+├── api/index.js                # Entry point para Vercel (serverless)
+├── vercel.json                 # Configuração de deploy Vercel
 ├── package.json
 ├── .env.example                # Modelo de configuração
 ├── admin.html                  # Painel administrativo
@@ -95,11 +97,34 @@ Coloque aqui as fotos/vídeos da Juliana. O servidor expõe esses arquivos em
 └── uploads/                    # (gerada em runtime, gitignored)
 ```
 
-## Deploy sugerido
+## Deploy
 
-- **Render**, **Railway**, **Fly.io** ou **VPS** (qualquer host com Node 18+).
-- Configure as variáveis de ambiente no painel do provedor.
-- Aponte o domínio para a porta `PORT` exposta.
+### Vercel (recomendado)
+
+O projeto já vem pronto para Vercel:
+
+1. Importe o repositório em <https://vercel.com/new>.
+2. Em **Settings → Environment Variables**, defina:
+   - `TURSO_DATABASE_URL`
+   - `TURSO_AUTH_TOKEN`
+   - `JWT_SECRET` (gere com `openssl rand -hex 48`)
+   - `ADMIN_INITIAL_USER` (opcional)
+   - `ADMIN_INITIAL_PASSWORD` (opcional, só vale no primeiro start)
+   - `PEXELS_API_KEY` (opcional)
+3. Faça o deploy. O Vercel:
+   - serve `index.html`, `moda.html`, `css/`, `js/`, `img/` e
+     `jubalbinodeoliveira/` como **estáticos** (CDN);
+   - executa `api/index.js` (Express) como **função serverless** para
+     `/api/*` e `/uploads/:id`.
+
+> **Importante:** no Vercel o filesystem é read-only. Por isso os uploads são
+> armazenados como BLOB no Turso e servidos via `GET /uploads/:id`. O limite
+> por arquivo é **25 MB** (cabível na resposta de uma função serverless).
+
+### Outras opções
+
+- **Render**, **Railway**, **Fly.io** ou VPS — basta configurar as mesmas
+  variáveis e rodar `npm start`.
 
 ## Segurança
 
