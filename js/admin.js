@@ -220,7 +220,6 @@
         '<label class="slot-featured"><input type="checkbox"' + featured + ' data-slot-action="toggle-featured"> Destaque (roupa escura)</label>' +
         '<div class="slot-actions">' +
           '<button type="button" class="btn btn-outline" data-slot-action="pick-library">Escolher da biblioteca</button>' +
-          '<button type="button" class="btn btn-outline" data-slot-action="pick-pexels">Buscar no Pexels</button>' +
           '<button type="button" class="btn btn-outline" data-slot-action="upload">Enviar arquivo</button>' +
           '<button type="button" class="btn" data-slot-action="reset" style="background:var(--color-error);">Limpar</button>' +
         '</div>' +
@@ -243,8 +242,6 @@
       pickFileForSlot(key);
     } else if (action === 'pick-library') {
       openLibraryFor(key);
-    } else if (action === 'pick-pexels') {
-      openPexelsFor(key);
     }
   }
 
@@ -347,7 +344,7 @@
   }
 
   // -------------------------------------------------------------------------
-  // Picker (modal) p/ slot escolher da biblioteca ou Pexels
+  // Picker (modal) p/ slot escolher da biblioteca
   // -------------------------------------------------------------------------
   function openLibraryFor(key) {
     st._pendingSlot = key;
@@ -357,7 +354,6 @@
     $('#picker-results').innerHTML = '';
     fetchJson(API + '/local-media').then(function (r) {
       st.localMedia = r.files || [];
-      // mostra biblioteca
       $('#picker-results').innerHTML = renderPickerLibrary();
       bindPickerLibraryClicks();
     });
@@ -368,12 +364,12 @@
       st.uploads.map(function (f) { return Object.assign({ source: 'upload' }, f); }),
       st.localMedia.map(function (f) { return Object.assign({ source: 'local' }, f); })
     );
-    if (!list.length) return '<p class="hint">Nenhuma mídia disponível ainda.</p>';
+    if (!list.length) return '<p class="hint">Nenhuma mídia disponível ainda. Envie fotos/vídeos na aba <em>Biblioteca</em>.</p>';
     return '<div class="picker-grid">' + list.map(function (m) {
       var thumb = m.kind === 'video'
         ? '<video src="' + esc(m.url) + '" muted></video>'
         : '<img src="' + esc(m.url) + '" alt="">';
-      return '<figure class="pick-card" data-url="' + esc(m.url) + '" data-kind="' + esc(m.kind) + '">' +
+      return '<figure class="pick-card" data-url="' + esc(m.url) + '" data-kind="' + esc(m.kind) + '" data-name="' + esc(m.name) + '">' +
         thumb + '<figcaption>' + esc(m.name) + '</figcaption></figure>';
     }).join('') + '</div>';
   }
@@ -384,58 +380,6 @@
         saveSlot(st._pendingSlot, c.getAttribute('data-kind'), c.getAttribute('data-url'), '', false)
           .then(closePicker);
       });
-    });
-  }
-  function openPexelsFor(key) {
-    st._pendingSlot = key;
-    var picker = $('#picker'); if (!picker) return;
-    $('#picker-title').textContent = 'Buscar no Pexels para ' + key;
-    $('#picker-results').innerHTML =
-      '<div class="pexels-bar">' +
-        '<input type="text" id="picker-q" placeholder="Ex: paris fashion week">' +
-        '<button class="btn" id="picker-q-go" type="button">Buscar</button>' +
-      '</div>' +
-      '<div class="pexels-presets">' +
-        ['paris fashion week street style', 'milan fashion week', 'new york street style',
-         'autumn fashion woman', 'fashion young adults'].map(function (p) {
-          return '<button class="btn btn-outline pexels-preset" type="button">' + esc(p) + '</button>';
-        }).join('') +
-      '</div>' +
-      '<div id="picker-pexels-results"></div>';
-    $('#picker-q-go').addEventListener('click', function () {
-      runPexels($('#picker-q').value);
-    });
-    $$('.pexels-preset').forEach(function (b) {
-      b.addEventListener('click', function () { runPexels(b.textContent); });
-    });
-    picker.classList.add('open');
-  }
-  function runPexels(query) {
-    var q = String(query || '').trim();
-    if (!q) return;
-    var out = $('#picker-pexels-results');
-    out.innerHTML = '<p class="hint">Buscando…</p>';
-    fetchJson(API + '/pexels/search?q=' + encodeURIComponent(q) + '&per_page=24').then(function (r) {
-      var photos = (r && r.photos) || [];
-      if (!photos.length) { out.innerHTML = '<p class="hint">Sem resultados.</p>'; return; }
-      out.innerHTML = '<div class="picker-grid">' + photos.map(function (p) {
-        return '<figure class="pick-card" data-url="' + esc(p.src.large2x || p.src.large) +
-          '" data-kind="image" data-photographer="' + esc(p.photographer) +
-          '" data-pageurl="' + esc(p.url) + '" data-alt="' + esc(p.alt || 'Foto Pexels') + '">' +
-          '<img src="' + esc(p.src.medium) + '" alt="' + esc(p.alt || '') + '">' +
-          '<figcaption>' + esc(p.photographer) + '</figcaption></figure>';
-      }).join('') + '</div>';
-      $$('.pick-card', out).forEach(function (c) {
-        c.addEventListener('click', function () {
-          if (!st._pendingSlot) return;
-          saveSlot(st._pendingSlot, 'image', c.getAttribute('data-url'),
-            c.getAttribute('data-photographer') + ' · Pexels', false).then(closePicker);
-        });
-      });
-    }).catch(function (err) {
-      out.innerHTML = err && err.message === 'pexels_not_configured'
-        ? '<p class="hint">Configure PEXELS_API_KEY no servidor para usar a busca.</p>'
-        : '<p class="hint">Falha na busca.</p>';
     });
   }
   function closePicker() {
@@ -450,26 +394,59 @@
   }
 
   // -------------------------------------------------------------------------
-  // Galeria pública (curadoria Pexels)
+  // Galeria pública (curadoria com fotos da Juliana)
   // -------------------------------------------------------------------------
   function bindGallery() {
-    var btn = $('#gallery-search'); if (!btn) return;
-    btn.addEventListener('click', function () { runGalleryQuery($('#gallery-query').value); });
-    $$('#gallery-presets .pexels-preset').forEach(function (b) {
-      b.addEventListener('click', function () { runGalleryQuery(b.textContent); });
-    });
-    $('#gallery-save').addEventListener('click', saveGallery);
+    var save = $('#gallery-save'); if (!save) return;
+    save.addEventListener('click', saveGallery);
     refreshGallery();
   }
   function refreshGallery() {
-    fetchJson(API + '/content/gallery').then(function (r) {
-      renderCurrentGallery(r.items || []);
+    Promise.all([
+      fetchJson(API + '/content/gallery'),
+      fetchJson(API + '/local-media'),
+    ]).then(function (r) {
+      st.localMedia = (r[1] && r[1].files) || [];
+      renderGalleryPicker();
+      renderCurrentGallery((r[0] && r[0].items) || []);
+    });
+  }
+  function renderGalleryPicker() {
+    var out = $('#gallery-results');
+    var list = [].concat(
+      st.uploads.map(function (f) { return Object.assign({ source: 'upload' }, f); }),
+      st.localMedia.map(function (f) { return Object.assign({ source: 'local' }, f); })
+    ).filter(function (m) { return m.kind === 'image'; });
+    if (!list.length) {
+      out.innerHTML = '<p class="hint">Nenhuma foto disponível. Envie fotos na aba <em>Biblioteca</em> ou adicione em <code>jubalbinodeoliveira/</code>.</p>';
+      return;
+    }
+    out.innerHTML = '<p class="hint">Clique em uma foto para adicioná-la à galeria.</p>' +
+      '<div class="picker-grid">' + list.map(function (m) {
+        return '<figure class="pick-card" data-payload=\'' +
+          esc(JSON.stringify({
+            id: 'lib-' + (m.id || m.name),
+            src: m.url, thumb: m.url, url: m.url,
+            photographer: 'Juliana Balbino',
+            alt: m.name,
+          })) + '\'>' +
+          '<img src="' + esc(m.url) + '" alt="' + esc(m.name) + '">' +
+          '<figcaption>' + esc(m.name) + '</figcaption></figure>';
+      }).join('') + '</div>';
+    $$('.pick-card', out).forEach(function (c) {
+      c.addEventListener('click', function () {
+        var host = $('#gallery-current');
+        var arr = host.dataset.items ? JSON.parse(host.dataset.items) : [];
+        arr.push(JSON.parse(c.getAttribute('data-payload')));
+        renderCurrentGallery(arr);
+      });
     });
   }
   function renderCurrentGallery(items) {
     var host = $('#gallery-current');
     if (!items.length) {
-      host.innerHTML = '<p class="hint">Galeria vazia. Busque no Pexels e adicione fotos abaixo.</p>';
+      host.innerHTML = '<p class="hint">Galeria vazia. Selecione fotos acima para adicioná-las.</p>';
+      host.dataset.items = '[]';
       return;
     }
     host.innerHTML = '<div class="gallery-grid">' + items.map(function (it, i) {
@@ -487,35 +464,6 @@
         renderCurrentGallery(arr);
       });
     });
-  }
-  function runGalleryQuery(q) {
-    q = String(q || '').trim(); if (!q) return;
-    var out = $('#gallery-results');
-    out.innerHTML = '<p class="hint">Buscando…</p>';
-    fetchJson(API + '/pexels/search?q=' + encodeURIComponent(q) + '&per_page=24').then(function (r) {
-      var photos = (r && r.photos) || [];
-      out.innerHTML = '<div class="picker-grid">' + photos.map(function (p) {
-        return '<figure class="pick-card" data-payload=\'' +
-          esc(JSON.stringify({
-            id: 'p' + p.id,
-            src: p.src.large2x || p.src.large,
-            thumb: p.src.medium,
-            url: p.url,
-            photographer: p.photographer,
-            alt: p.alt || 'Foto Pexels',
-          })) + '\'>' +
-          '<img src="' + esc(p.src.medium) + '" alt="">' +
-          '<figcaption>' + esc(p.photographer) + '</figcaption></figure>';
-      }).join('') + '</div>';
-      $$('.pick-card', out).forEach(function (c) {
-        c.addEventListener('click', function () {
-          var host = $('#gallery-current');
-          var arr = host.dataset.items ? JSON.parse(host.dataset.items) : [];
-          arr.push(JSON.parse(c.getAttribute('data-payload')));
-          renderCurrentGallery(arr);
-        });
-      });
-    }).catch(function () { out.innerHTML = '<p class="hint">Falha na busca.</p>'; });
   }
   function saveGallery() {
     var host = $('#gallery-current');

@@ -36,7 +36,6 @@ const IS_VERCEL = !!process.env.VERCEL;
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(48).toString('hex');
 const ADMIN_INITIAL_USER = process.env.ADMIN_INITIAL_USER || 'JulianaAdmin';
 const ADMIN_INITIAL_PASSWORD = process.env.ADMIN_INITIAL_PASSWORD || 'ModaeBemEstar2026#';
-const PEXELS_API_KEY = process.env.PEXELS_API_KEY || '';
 
 if (!process.env.JWT_SECRET) {
   console.warn('[aviso] JWT_SECRET não definido — sessões serão invalidadas a cada restart.');
@@ -412,24 +411,6 @@ api.get('/local-media', (_req, res) => {
     })
     .filter(Boolean);
   res.json({ files });
-});
-
-// ---- Pexels proxy ---------------------------------------------------------
-api.get('/pexels/search', authRequired, async (req, res) => {
-  if (!PEXELS_API_KEY) return res.status(503).json({ error: 'pexels_not_configured' });
-  const q = String(req.query.q || '').trim();
-  const per = Math.min(parseInt(req.query.per_page || '20', 10) || 20, 40);
-  if (!q) return res.status(400).json({ error: 'missing_query' });
-  try {
-    const r = await fetch(
-      `https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}&per_page=${per}`,
-      { headers: { Authorization: PEXELS_API_KEY } }
-    );
-    if (!r.ok) return res.status(r.status).json({ error: 'pexels_error' });
-    res.json(await r.json());
-  } catch (e) {
-    res.status(502).json({ error: 'pexels_fetch_failed' });
-  }
 });
 
 // ---- Submissões -----------------------------------------------------------

@@ -4,13 +4,13 @@ Site dinâmico (Node/Express + Turso/libSQL) com:
 
 - 🎨 Paleta de outono extraída de `img/outonoCores.jpeg` e logo em `img/logo.jpeg`.
 - 🔐 Painel administrativo com login/senha real e troca de credenciais.
-- 🖼️ Substituição de **qualquer foto/vídeo** dos cards por upload, biblioteca local
-  ou busca no Pexels.
+- 🖼️ Substituição de **qualquer foto/vídeo** dos cards por upload ou biblioteca
+  local.
 - 🎬 Vídeos da pasta `jubalbinodeoliveira/` viram **fundo silencioso em loop**
   dos cards/heroes.
 - ⭐ Fotos com **roupas escuras** (nome contendo `preto`, `dark`, `escur`, `noite`)
   ganham realce automático no site.
-- 🌍 Galeria curada Pexels (Milão, Paris, Nova York, jovens fashion, lugares fashion).
+- 🍂 Galeria de looks curada pela própria Juliana a partir das fotos enviadas.
 - 📩 Formulário de inscrição salvo no banco (com fallback em `localStorage`).
 - ◆ Botão admin **discreto** no canto superior direito de toda página.
 
@@ -18,7 +18,6 @@ Site dinâmico (Node/Express + Turso/libSQL) com:
 
 - Node.js 18.17+ (usa `fetch` nativo).
 - Conta no [Turso](https://turso.tech) (gratuito) — opcional, cai em SQLite local.
-- Conta no [Pexels](https://www.pexels.com/api/) (gratuito) para a busca de imagens.
 
 ## Instalação
 
@@ -27,7 +26,7 @@ git clone https://github.com/dansfisica85/juliana.git
 cd juliana
 npm install
 cp .env.example .env
-# edite .env com suas credenciais reais (Turso, JWT_SECRET, Pexels)
+# edite .env com suas credenciais reais (Turso, JWT_SECRET)
 npm start
 ```
 
@@ -42,7 +41,6 @@ Acesse `http://localhost:3000`.
 | `JWT_SECRET`            | Segredo aleatório para assinar cookies de sessão (use 64+ chars).  |
 | `ADMIN_INITIAL_USER`    | Login inicial do admin (default `JulianaAdmin`).                   |
 | `ADMIN_INITIAL_PASSWORD`| Senha inicial do admin (default `ModaeBemEstar2026#`).             |
-| `PEXELS_API_KEY`        | Chave da API Pexels (busca de imagens — opcional).                 |
 | `PORT`                  | Porta HTTP (default `3000`).                                       |
 | `NODE_ENV`              | `development` ou `production`.                                     |
 
@@ -57,11 +55,10 @@ Acesse `http://localhost:3000`.
 4. Em **Cards do site**, troque a mídia de qualquer slot:
    - **Escolher da biblioteca** — usa fotos/vídeos enviados ou da pasta
      `jubalbinodeoliveira/`.
-   - **Buscar no Pexels** — busca direta com presets para Paris/Milão/NY.
-   - **Enviar arquivo** — upload imediato (PNG/JPG/WEBP/MP4/WEBM, até 100 MB).
+   - **Enviar arquivo** — upload imediato (PNG/JPG/WEBP/MP4/WEBM, até 25 MB).
    - **Destaque** — marca a foto como roupa escura para ganhar realce.
 5. Em **Biblioteca**, gerencie todos os arquivos enviados.
-6. Em **Galeria Pexels**, monte a curadoria que aparece em **Moda → Inspiração**.
+6. Em **Galeria pública**, monte a curadoria que aparece em **Moda → Galeria de looks**.
 7. Em **Inscrições**, veja/exporte/limpe os contatos do formulário.
 
 ## Pasta `jubalbinodeoliveira/`
@@ -77,7 +74,7 @@ Coloque aqui as fotos/vídeos da Juliana. O servidor expõe esses arquivos em
 
 ```
 .
-├── server.js                   # Express + Turso + Auth + Uploads + Pexels
+├── server.js                   # Express + Turso + Auth + Uploads
 ├── api/index.js                # Entry point para Vercel (serverless)
 ├── vercel.json                 # Configuração de deploy Vercel
 ├── package.json
@@ -90,7 +87,6 @@ Coloque aqui as fotos/vídeos da Juliana. O servidor expõe esses arquivos em
 │   ├── site-app.js             # Comportamento público + botão admin flutuante
 │   ├── admin.js                # Painel admin (consome /api/*)
 │   ├── form.js                 # Formulário de contato
-│   ├── pexels-defaults.js      # Curadoria default (fallback)
 │   └── main.js                 # (compat — vazio)
 ├── jubalbinodeoliveira/        # Suas mídias (gitkeep)
 ├── img/                        # Logo + paleta
@@ -110,7 +106,6 @@ O projeto já vem pronto para Vercel:
    - `JWT_SECRET` (gere com `openssl rand -hex 48`)
    - `ADMIN_INITIAL_USER` (opcional)
    - `ADMIN_INITIAL_PASSWORD` (opcional, só vale no primeiro start)
-   - `PEXELS_API_KEY` (opcional)
 3. Faça o deploy. O Vercel:
    - serve `index.html`, `moda.html`, `css/`, `js/`, `img/` e
      `jubalbinodeoliveira/` como **estáticos** (CDN);

@@ -5,12 +5,12 @@
  * Responsável por todo o comportamento dinâmico das páginas públicas:
  *  - Pinta a paleta de outono e mantém o ano atualizado.
  *  - Aplica imagens/vídeos personalizados (slots do admin) em [data-img-key]
- *    ou [data-video-key]; cai em defaults do Pexels e na pasta jubalbinodeoliveira/
- *    quando ainda não foram definidos.
+ *    ou [data-video-key]; cai na pasta jubalbinodeoliveira/ quando ainda
+ *    não foram definidos.
  *  - Distribui automaticamente as fotos/vídeos da pasta jubalbinodeoliveira/
  *    pelo site, com destaque para roupas escuras e vídeos como background
  *    silencioso em loop.
- *  - Renderiza a galeria pública Pexels em .pexels-gallery.
+ *  - Renderiza a galeria pública (curadoria das fotos da Juliana) em .looks-gallery.
  *  - Mostra um botão admin discreto no canto superior direito que abre o
  *    modal de login e leva ao painel após autenticação.
  */
@@ -72,9 +72,9 @@
         return {
           src: it.src,
           thumb: it.thumb || it.src,
-          url: it.page_url || it.url || '#',
-          photographer: it.photographer || 'Pexels',
-          alt: it.alt || 'Foto Pexels',
+          url: it.page_url || it.url || '',
+          caption: it.photographer || it.alt || '',
+          alt: it.alt || 'Foto da Juliana',
         };
       });
       var files = (r[2] && r[2].files) || [];
@@ -96,8 +96,6 @@
   }
 
   function defaultFor(key) {
-    var defaults = window.JB_DEFAULT_IMAGES || {};
-    if (defaults[key]) return defaults[key];
     var pool = state.localMedia.featured.length
       ? state.localMedia.featured
       : state.localMedia.images;
@@ -198,21 +196,19 @@
   }
 
   function renderGallery() {
-    var container = $('.pexels-gallery');
+    var container = $('.looks-gallery') || $('.pexels-gallery');
     if (!container) return;
-    var items = state.gallery.length ? state.gallery : (window.JB_DEFAULT_GALLERY || []);
+    var items = state.gallery;
     if (!items.length) {
-      container.innerHTML = '<p class="gallery-empty">A galeria ainda não foi configurada.</p>';
+      container.innerHTML = '<p class="gallery-empty">A galeria ainda não foi configurada. Adicione fotos no painel administrativo.</p>';
       return;
     }
     container.innerHTML = '<div class="gallery-grid">' + items.map(function (it) {
-      return '<figure class="gallery-item">' +
-        '<img src="' + escapeAttr(it.thumb || it.src) + '" alt="' + escapeAttr(it.alt) + '" loading="lazy">' +
-        '<figcaption class="gallery-caption">Foto: <a href="' + escapeAttr(it.url) +
-        '" target="_blank" rel="noopener">' + escapeAttr(it.photographer) + '</a> · Pexels</figcaption>' +
-        '</figure>';
-    }).join('') + '</div>' +
-      '<p class="pexels-credit">Imagens gratuitas via <a href="https://www.pexels.com" target="_blank" rel="noopener">Pexels</a>.</p>';
+      var fig = '<figure class="gallery-item">' +
+        '<img src="' + escapeAttr(it.thumb || it.src) + '" alt="' + escapeAttr(it.alt) + '" loading="lazy">';
+      if (it.caption) fig += '<figcaption class="gallery-caption">' + escapeAttr(it.caption) + '</figcaption>';
+      return fig + '</figure>';
+    }).join('') + '</div>';
   }
 
   // -------------------------------------------------------------------------

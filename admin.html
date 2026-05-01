@@ -55,7 +55,7 @@
       <div class="admin-tabs" role="tablist">
         <button class="admin-tab active" data-tab="cards" type="button">🖼️ Cards do site</button>
         <button class="admin-tab" data-tab="library" type="button">📚 Biblioteca</button>
-        <button class="admin-tab" data-tab="gallery" type="button">🌆 Galeria Pexels</button>
+        <button class="admin-tab" data-tab="gallery" type="button">🌆 Galeria pública</button>
         <button class="admin-tab" data-tab="submissions" type="button">📬 Inscrições</button>
         <button class="admin-tab" data-tab="profile" type="button">👤 Perfil</button>
       </div>
@@ -65,7 +65,7 @@
       <!-- Cards -->
       <div id="panel-cards" class="admin-panel active">
         <div class="section-title"><h2>Substituir foto/vídeo de qualquer card</h2></div>
-        <p class="hint">Clique em <em>Escolher da biblioteca</em>, <em>Buscar no Pexels</em> ou <em>Enviar arquivo</em> para trocar a mídia de cada slot. Marque <strong>Destaque</strong> em fotos com roupas escuras para realçá-las no site.</p>
+        <p class="hint">Clique em <em>Escolher da biblioteca</em> ou <em>Enviar arquivo</em> para trocar a mídia de cada slot. Marque <strong>Destaque</strong> em fotos com roupas escuras para realçá-las no site.</p>
         <div id="image-slots"></div>
       </div>
 
@@ -84,19 +84,8 @@
 
       <!-- Galeria -->
       <div id="panel-gallery" class="admin-panel">
-        <div class="section-title"><h2>Curar galeria pública (Pexels)</h2></div>
-        <p class="hint">Monte uma curadoria de fotos gratuitas — moda de Milão, Paris, Nova York, jovens fashion, lugares fashion etc. Aparece na página <a href="moda.html">Moda</a>.</p>
-        <div class="pexels-bar">
-          <input type="text" id="gallery-query" placeholder="Ex: paris fashion week street style">
-          <button type="button" id="gallery-search" class="btn">Buscar no Pexels</button>
-        </div>
-        <div class="pexels-presets" id="gallery-presets">
-          <button class="btn btn-outline pexels-preset" type="button">paris fashion week street style</button>
-          <button class="btn btn-outline pexels-preset" type="button">milan fashion week</button>
-          <button class="btn btn-outline pexels-preset" type="button">new york street style</button>
-          <button class="btn btn-outline pexels-preset" type="button">autumn fashion woman</button>
-          <button class="btn btn-outline pexels-preset" type="button">fashion young adults</button>
-        </div>
+        <div class="section-title"><h2>Galeria pública (suas fotos)</h2></div>
+        <p class="hint">Monte a galeria que aparece em <a href="moda.html">Moda</a> usando suas próprias fotos da biblioteca (uploads ou pasta <code>jubalbinodeoliveira/</code>). Clique em uma foto para adicionar.</p>
         <div id="gallery-results" style="margin-top:1rem;"></div>
         <hr style="margin:2rem 0;border:none;border-top:1px solid var(--color-border);">
         <h3>Galeria atual</h3>
