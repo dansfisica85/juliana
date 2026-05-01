@@ -3,57 +3,173 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inscrições — Painel Admin — Juliana Balbino</title>
+  <title>Painel Admin — Juliana Balbino</title>
   <meta name="robots" content="noindex,nofollow">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Dancing+Script:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
   <header class="site-header">
     <div class="nav">
-      <a href="index.html" class="brand">Juliana Balbino<small>painel administrativo</small></a>
+      <a href="index.html" class="brand">
+        <img src="img/logo.jpeg" alt="Juliana Balbino" class="brand-logo">
+        <span class="brand-text">Juliana Balbino<small>painel administrativo</small></span>
+      </a>
       <ul class="nav-links">
         <li><a href="index.html">Início</a></li>
         <li><a href="contato.html">Formulário</a></li>
-        <li><a href="admin.html">Inscrições</a></li>
+        <li><a href="admin.html">Painel</a></li>
       </ul>
     </div>
   </header>
 
   <main>
-    <section class="section container">
-      <div class="section-title"><h2>Inscrições recebidas</h2></div>
-      <p class="text-center" style="color:var(--color-muted);">
-        Esta página exibe as inscrições enviadas pelo formulário de contato.
-        Os dados ficam armazenados <strong>apenas no seu navegador</strong> (localStorage).
-      </p>
-      <p class="text-center" style="margin-bottom:1.5rem;">
-        Total de inscrições: <strong id="submissions-count">0</strong>
-      </p>
+    <!-- ============ LOGIN ============ -->
+    <section id="login-section" class="container">
+      <div class="login-card">
+        <h2>Acesso restrito</h2>
+        <p class="hint">Entre com sua senha para gerenciar fotos e inscrições.</p>
+        <form id="login-form" autocomplete="off">
+          <div class="form-group">
+            <label for="login-password">Senha</label>
+            <input type="password" id="login-password" required autocomplete="current-password">
+          </div>
+          <div class="form-actions">
+            <button class="btn" type="submit">Entrar</button>
+          </div>
+          <div id="login-message" class="admin-status"></div>
+        </form>
+        <p class="hint" style="margin-top:1rem;">
+          Senha padrão inicial: <code>juliana2026</code><br>
+          Altere assim que fizer o primeiro acesso.
+        </p>
+      </div>
+    </section>
 
-      <div class="admin-toolbar">
-        <a href="contato.html" class="btn btn-outline">+ Nova inscrição</a>
-        <div>
-          <button id="btn-export" class="btn btn-outline" type="button">Exportar JSON</button>
-          <button id="btn-clear" class="btn" type="button" style="background:var(--color-error);">Apagar tudo</button>
-        </div>
+    <!-- ============ ADMIN ============ -->
+    <section id="admin-section" class="section container" style="display:none;">
+      <div class="logout-bar">
+        <button type="button" id="btn-change-password" class="btn btn-outline" style="margin-right:0.5rem;">Trocar senha</button>
+        <button type="button" id="btn-logout" class="btn">Sair</button>
       </div>
 
-      <div id="submissions-container"></div>
+      <div class="admin-tabs" role="tablist">
+        <button class="admin-tab active" data-tab="images" type="button">📸 Fotos do site</button>
+        <button class="admin-tab" data-tab="gallery" type="button">🌆 Galeria Pexels</button>
+        <button class="admin-tab" data-tab="submissions" type="button">📬 Inscrições</button>
+        <button class="admin-tab" data-tab="settings" type="button">⚙️ Configurações</button>
+      </div>
+
+      <div id="admin-status" class="admin-status"></div>
+
+      <!-- ===== Painel: imagens ===== -->
+      <div id="panel-images" class="admin-panel active">
+        <div class="section-title"><h2>Substituir imagens do site</h2></div>
+        <p style="color:var(--color-muted);max-width:780px;">
+          Para cada espaço do site abaixo, você pode <strong>enviar uma foto sua</strong> ou
+          <strong>buscar uma imagem gratuita no Pexels</strong>. As alterações ficam salvas neste
+          navegador (localStorage) e aparecem imediatamente em todas as páginas.
+        </p>
+        <div id="image-slots" class="image-slots"></div>
+      </div>
+
+      <!-- ===== Painel: galeria pública (Pexels) ===== -->
+      <div id="panel-gallery" class="admin-panel">
+        <div class="section-title"><h2>Curar galeria pública (Pexels)</h2></div>
+        <p style="color:var(--color-muted);max-width:780px;">
+          Monte uma galeria com fotos gratuitas do Pexels — moda de Milão, Paris, Nova York,
+          jovens fashion, lugares fashion etc. As fotos selecionadas aparecem na página
+          <a href="moda.html">Moda</a> para todas as visitantes.
+        </p>
+
+        <div class="pexels-bar">
+          <input type="text" id="gallery-query" placeholder="Ex: paris fashion week street style">
+          <button type="button" id="gallery-search" class="btn">Buscar no Pexels</button>
+        </div>
+        <div class="pexels-presets" id="gallery-presets"></div>
+
+        <div id="gallery-results"></div>
+
+        <hr style="margin:2rem 0;border:none;border-top:1px solid var(--color-border);">
+        <h3>Galeria pública atual</h3>
+        <div id="gallery-current"></div>
+      </div>
+
+      <!-- ===== Painel: inscrições ===== -->
+      <div id="panel-submissions" class="admin-panel">
+        <div class="section-title"><h2>Inscrições recebidas</h2></div>
+        <p class="text-center" style="color:var(--color-muted);">
+          Total: <strong id="submissions-count">0</strong>
+        </p>
+        <div class="admin-toolbar">
+          <a href="contato.html" class="btn btn-outline">+ Nova inscrição</a>
+          <div>
+            <button id="btn-export" class="btn btn-outline" type="button">Exportar JSON</button>
+            <button id="btn-clear" class="btn" type="button" style="background:var(--color-error);">Apagar tudo</button>
+          </div>
+        </div>
+        <div id="submissions-container"></div>
+      </div>
+
+      <!-- ===== Painel: configurações ===== -->
+      <div id="panel-settings" class="admin-panel">
+        <div class="section-title"><h2>Configurações</h2></div>
+
+        <div class="form-wrapper" style="margin-top:0;">
+          <h3>Chave de API do Pexels</h3>
+          <p style="color:var(--color-muted);font-size:0.9rem;">
+            O Pexels oferece imagens gratuitas. Crie sua chave em
+            <a href="https://www.pexels.com/api/" target="_blank" rel="noopener">pexels.com/api</a>
+            (gratuito, basta criar uma conta) e cole abaixo. A chave fica salva apenas neste navegador.
+          </p>
+          <div class="form-group">
+            <label for="pexels-key">Sua chave Pexels</label>
+            <input type="text" id="pexels-key" placeholder="cole aqui a chave" autocomplete="off">
+          </div>
+          <div class="form-actions">
+            <button type="button" id="pexels-key-save" class="btn">Salvar chave</button>
+          </div>
+        </div>
+
+        <div class="form-wrapper">
+          <h3>Sobre o painel</h3>
+          <p style="color:var(--color-muted);font-size:0.9rem;">
+            Este site é estático (hospedado no GitHub Pages). Por isso, o login e os dados
+            (fotos, galeria, inscrições) ficam armazenados apenas no navegador onde você acessar.
+            Para uma autenticação real e armazenamento em servidor, é necessário um backend.
+          </p>
+        </div>
+      </div>
     </section>
+
+    <!-- ============ Pexels picker (modal) ============ -->
+    <div id="pexels-picker" style="display:none;position:fixed;inset:0;background:rgba(58,38,32,0.6);z-index:1000;overflow:auto;padding:2rem 1rem;">
+      <div style="max-width:880px;margin:0 auto;background:var(--color-surface);border-radius:var(--radius);padding:1.5rem;box-shadow:var(--shadow-md);">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+          <h3 id="pexels-picker-title" style="margin:0;">Buscar foto no Pexels</h3>
+          <button type="button" id="pexels-picker-close" class="btn btn-outline">Fechar</button>
+        </div>
+        <div class="pexels-bar" style="margin-top:1rem;">
+          <input type="text" id="pexels-picker-query" placeholder="Ex: milan fashion week">
+          <button type="button" id="pexels-picker-search" class="btn">Buscar</button>
+        </div>
+        <div id="pexels-picker-results" style="margin-top:1rem;"></div>
+      </div>
+    </div>
   </main>
 
   <footer class="site-footer">
     <div class="container">
       <div><h4>Juliana Balbino</h4><p>Painel administrativo do blog.</p></div>
-      <div><h4>Navegação</h4><p><a href="index.html">Início</a><br><a href="contato.html">Formulário</a><br><a href="admin.html">Inscrições</a></p></div>
+      <div><h4>Navegação</h4><p><a href="index.html">Início</a><br><a href="contato.html">Formulário</a><br><a href="admin.html">Painel</a></p></div>
     </div>
     <div class="copy">© <span id="year"></span> Juliana Balbino.</div>
   </footer>
 
   <script src="js/main.js"></script>
   <script src="js/form.js"></script>
+  <script src="js/admin.js"></script>
 </body>
 </html>

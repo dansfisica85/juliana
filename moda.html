@@ -13,7 +13,10 @@
 <body>
   <header class="site-header">
     <div class="nav">
-      <a href="index.html" class="brand">Juliana Balbino<small>moda · bem-estar · qualidade de vida</small></a>
+      <a href="index.html" class="brand">
+        <img src="img/logo.jpeg" alt="Juliana Balbino" class="brand-logo">
+        <span class="brand-text">Juliana Balbino<small>moda · bem-estar · qualidade de vida</small></span>
+      </a>
       <ul class="nav-links">
         <li><a href="index.html">Início</a></li>
         <li><a href="moda.html">Moda</a></li>
@@ -25,7 +28,7 @@
   </header>
 
   <main>
-    <section class="hero">
+    <section class="hero" data-img-key="moda-hero">
       <div class="container">
         <h1>Moda</h1>
         <p class="tagline">Estilo autêntico, tendências e moda consciente para se sentir bem com você mesma.</p>
@@ -35,7 +38,7 @@
     <section class="section container">
       <div class="posts-grid">
         <article class="post-card">
-          <div class="post-image">Moda</div>
+          <div class="post-image" data-img-key="moda-post-1">Moda</div>
           <div class="post-body">
             <span class="post-category">Moda</span>
             <h3>Tendências de moda para o outono de 2026</h3>
@@ -45,7 +48,7 @@
         </article>
 
         <article class="post-card">
-          <div class="post-image">Look</div>
+          <div class="post-image" data-img-key="moda-post-2">Look</div>
           <div class="post-body">
             <span class="post-category">Moda</span>
             <h3>Guarda-roupa cápsula: menos é mais</h3>
@@ -55,7 +58,7 @@
         </article>
 
         <article class="post-card">
-          <div class="post-image">Eco</div>
+          <div class="post-image" data-img-key="moda-post-3">Eco</div>
           <div class="post-body">
             <span class="post-category">Moda</span>
             <h3>Moda sustentável: por onde começar</h3>
@@ -64,6 +67,15 @@
           </div>
         </article>
       </div>
+    </section>
+
+    <section class="section container">
+      <div class="section-title"><h2>Inspiração de moda pelo mundo</h2></div>
+      <p class="text-center" style="color:var(--color-muted);max-width:680px;margin:0 auto 1.5rem;">
+        Uma curadoria de imagens gratuitas — moda de Milão, Paris e Nova York,
+        jovens e adultos fashion e lugares cheios de estilo.
+      </p>
+      <div class="pexels-gallery"></div>
     </section>
   </main>
 
