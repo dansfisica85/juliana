@@ -42,7 +42,19 @@ if (!process.env.JWT_SECRET) {
 }
 
 const ROOT = path.resolve(__dirname);
-const LOCAL_MEDIA_DIR = path.join(ROOT, 'jubalbinodeoliveira');
+const LOCAL_MEDIA_DIR = path.join(ROOT, 'fotos');
+const LOCAL_MEDIA_URL = '/fotos';
+
+// Categorias do site (em ordem) — usadas para distribuir as fotos da pasta
+// fotos/ entre as páginas. Cada "shoot" (mesmo prefixo de timestamp do Instagram)
+// fica inteiro na mesma categoria, e os shoots se alternam de forma determinística.
+const SITE_CATEGORIES = ['moda', 'bem-estar', 'vida'];
+
+function extractShootKey(name) {
+  // jubalbinodeoliveira_<unix>_<id>_<author>.<ext> → usa o <unix> como agrupador
+  const m = /_(\d{9,11})_/.exec(name);
+  return m ? m[1] : name;
+}
 
 // ---------------------------------------------------------------------------
 // Banco — Turso (libSQL) ou fallback local
@@ -141,7 +153,7 @@ if (!IS_VERCEL) {
       if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
     },
   }));
-  app.use('/jubalbinodeoliveira', express.static(LOCAL_MEDIA_DIR, { maxAge: '7d' }));
+  app.use(LOCAL_MEDIA_URL, express.static(LOCAL_MEDIA_DIR, { maxAge: '7d' }));
 }
 
 // ---------------------------------------------------------------------------
@@ -390,27 +402,54 @@ async function serveUpload(req, res) {
 }
 app.get('/uploads/:id', serveUpload);
 
-// ---- Mídia local (pasta jubalbinodeoliveira/) ----------------------------
-api.get('/local-media', (_req, res) => {
+// ---- Mídia local (pasta fotos/) ------------------------------------------
+api.get('/local-media', (req, res) => {
   if (!fs.existsSync(LOCAL_MEDIA_DIR)) return res.json({ files: [] });
-  const files = fs.readdirSync(LOCAL_MEDIA_DIR)
+  const raw = fs.readdirSync(LOCAL_MEDIA_DIR)
     .filter(f => !f.startsWith('.') && f.toLowerCase() !== 'readme.md')
     .map(f => {
       const ext = path.extname(f).toLowerCase();
       const isVideo = ['.mp4', '.webm', '.mov', '.m4v'].includes(ext);
       const isImage = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif'].includes(ext);
       if (!isVideo && !isImage) return null;
-      const lc = f.toLowerCase();
-      const dark = /(preto|black|dark|escur|noite|night)/.test(lc);
       return {
         name: f,
-        url: '/jubalbinodeoliveira/' + encodeURIComponent(f),
+        url: LOCAL_MEDIA_URL + '/' + encodeURIComponent(f),
         kind: isVideo ? 'video' : 'image',
-        featured: dark,
+        shoot: extractShootKey(f),
       };
     })
     .filter(Boolean);
-  res.json({ files });
+
+  // Ordena estável por nome (timestamp ASC) para gerar categorias previsíveis
+  raw.sort((a, b) => a.name.localeCompare(b.name));
+
+  // Atribui categoria por "shoot" (mesmo timestamp = mesmo ensaio): shoots
+  // alternam-se entre moda → bem-estar → vida em ordem cronológica.
+  const shootIndex = new Map();
+  let idx = 0;
+  for (const f of raw) {
+    if (!shootIndex.has(f.shoot)) shootIndex.set(f.shoot, idx++);
+  }
+  const files = raw.map((f, i) => {
+    const sIdx = shootIndex.get(f.shoot) || 0;
+    const category = SITE_CATEGORIES[sIdx % SITE_CATEGORIES.length];
+    // Destaque "automático" para foto de capa de cada shoot (a primeira)
+    const featured = i === 0 || raw[i - 1].shoot !== f.shoot;
+    return {
+      name: f.name,
+      url: f.url,
+      kind: f.kind,
+      category,
+      featured,
+    };
+  });
+
+  const cat = String(req.query.category || '').trim().toLowerCase();
+  const filtered = cat && SITE_CATEGORIES.includes(cat)
+    ? files.filter(f => f.category === cat)
+    : files;
+  res.json({ files: filtered, categories: SITE_CATEGORIES });
 });
 
 // ---- Submissões -----------------------------------------------------------

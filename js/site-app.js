@@ -5,9 +5,9 @@
  * Responsável por todo o comportamento dinâmico das páginas públicas:
  *  - Pinta a paleta de outono e mantém o ano atualizado.
  *  - Aplica imagens/vídeos personalizados (slots do admin) em [data-img-key]
- *    ou [data-video-key]; cai na pasta jubalbinodeoliveira/ quando ainda
+ *    ou [data-video-key]; cai na pasta fotos/ quando ainda
  *    não foram definidos.
- *  - Distribui automaticamente as fotos/vídeos da pasta jubalbinodeoliveira/
+ *  - Distribui automaticamente as fotos/vídeos da pasta fotos/
  *    pelo site, com destaque para roupas escuras e vídeos como background
  *    silencioso em loop.
  *  - Renderiza a galeria pública (curadoria das fotos da Juliana) em .looks-gallery.
@@ -79,12 +79,34 @@
       });
       var files = (r[2] && r[2].files) || [];
       state.localMedia = {
+        all: files,
         images: files.filter(function (f) { return f.kind === 'image'; }),
         videos: files.filter(function (f) { return f.kind === 'video'; }),
         featured: files.filter(function (f) { return f.kind === 'image' && f.featured; }),
       };
       state.me = r[3] && r[3].user ? r[3].user : null;
     });
+  }
+
+  // ----- Categorias --------------------------------------------------------
+  // Cada slot do site tem prefixo: moda-*, bem-*, vida-*, home-post-moda etc.
+  // Mapeamos para a categoria devolvida pela API (`moda` | `bem-estar` | `vida`).
+  function categoryForKey(key) {
+    if (!key) return null;
+    if (/^moda(-|$)/.test(key) || /post-moda$/.test(key)) return 'moda';
+    if (/^bem(-|$)/.test(key) || /post-bem$/.test(key)) return 'bem-estar';
+    if (/^vida(-|$)/.test(key) || /post-vida$/.test(key)) return 'vida';
+    return null;
+  }
+  function imagesForCategory(cat) {
+    if (!cat) return state.localMedia.images;
+    var pool = state.localMedia.images.filter(function (f) { return f.category === cat; });
+    return pool.length ? pool : state.localMedia.images;
+  }
+  function featuredForCategory(cat) {
+    if (!cat) return state.localMedia.featured;
+    var pool = state.localMedia.featured.filter(function (f) { return f.category === cat; });
+    return pool.length ? pool : state.localMedia.featured;
   }
 
   // Distribuição determinística (mesma key sempre cai no mesmo arquivo).
@@ -96,9 +118,9 @@
   }
 
   function defaultFor(key) {
-    var pool = state.localMedia.featured.length
-      ? state.localMedia.featured
-      : state.localMedia.images;
+    var cat = categoryForKey(key);
+    var feat = featuredForCategory(cat);
+    var pool = feat.length ? feat : imagesForCategory(cat);
     var pick = pickStable(pool, key);
     return pick ? pick.url : null;
   }
@@ -177,13 +199,16 @@
   }
 
   // Distribui automaticamente uma faixa de destaques quando há um container
-  // com [data-jb-featured] na página.
+  // com [data-jb-featured] na página. Aceita opcionalmente data-jb-category
+  // para limitar a uma categoria específica.
   function distributeExtras() {
     var host = $('[data-jb-featured]');
     if (!host) return;
-    var featured = state.localMedia.featured.length
-      ? state.localMedia.featured
-      : state.localMedia.images.slice(0, 8);
+    var cat = host.getAttribute('data-jb-category') || pageCategory();
+    var featured = featuredForCategory(cat);
+    if (!featured.length) {
+      featured = imagesForCategory(cat).slice(0, 8);
+    }
     if (!featured.length) {
       host.innerHTML = '';
       return;
@@ -195,13 +220,30 @@
     }).join('');
   }
 
+  // Deduz a categoria da página atual a partir do nome do arquivo.
+  function pageCategory() {
+    var path = (window.location.pathname.split('/').pop() || '').toLowerCase();
+    if (path.indexOf('moda') === 0) return 'moda';
+    if (path.indexOf('bem-estar') === 0) return 'bem-estar';
+    if (path.indexOf('qualidade-vida') === 0) return 'vida';
+    return null;
+  }
+
   function renderGallery() {
     var container = $('.looks-gallery') || $('.pexels-gallery');
     if (!container) return;
     var items = state.gallery;
     if (!items.length) {
-      container.innerHTML = '<p class="gallery-empty">A galeria ainda não foi configurada. Adicione fotos no painel administrativo.</p>';
-      return;
+      // Fallback: monta uma galeria com as fotos locais da categoria atual.
+      var cat = pageCategory();
+      var pool = imagesForCategory(cat);
+      if (!pool.length) {
+        container.innerHTML = '<p class="gallery-empty">A galeria ainda não foi configurada. Adicione fotos no painel administrativo.</p>';
+        return;
+      }
+      items = pool.slice(0, 24).map(function (m) {
+        return { src: m.url, thumb: m.url, alt: m.name, caption: '' };
+      });
     }
     container.innerHTML = '<div class="gallery-grid">' + items.map(function (it) {
       var fig = '<figure class="gallery-item">' +

@@ -284,7 +284,7 @@
       st.localMedia.map(function (f) { return Object.assign({ source: 'local' }, f); })
     );
     if (!list.length) {
-      host.innerHTML = '<p class="hint">Nenhuma mídia ainda. Envie fotos/vídeos ou adicione arquivos em <code>jubalbinodeoliveira/</code>.</p>';
+      host.innerHTML = '<p class="hint">Nenhuma mídia ainda. Envie fotos/vídeos ou adicione arquivos em <code>fotos/</code>.</p>';
       return;
     }
     host.innerHTML = list.map(function (m) {
@@ -294,7 +294,7 @@
       return '<figure class="lib-card" data-url="' + esc(m.url) + '" data-kind="' + esc(m.kind) + '" data-source="' + esc(m.source) + '" data-name="' + esc(m.name) + '">' +
         thumb +
         '<figcaption>' +
-          '<small>' + esc(m.source === 'local' ? 'jubalbinodeoliveira' : 'upload') + (m.featured ? ' · destaque' : '') + '</small>' +
+          '<small>' + esc(m.source === 'local' ? ('fotos' + (m.category ? ' · ' + m.category : '')) : 'upload') + (m.featured ? ' · destaque' : '') + '</small>' +
           '<span>' + esc(m.name) + '</span>' +
           (m.source === 'upload'
             ? '<button type="button" class="btn-link danger" data-lib-action="delete">excluir</button>'
@@ -418,7 +418,7 @@
       st.localMedia.map(function (f) { return Object.assign({ source: 'local' }, f); })
     ).filter(function (m) { return m.kind === 'image'; });
     if (!list.length) {
-      out.innerHTML = '<p class="hint">Nenhuma foto disponível. Envie fotos na aba <em>Biblioteca</em> ou adicione em <code>jubalbinodeoliveira/</code>.</p>';
+      out.innerHTML = '<p class="hint">Nenhuma foto disponível. Envie fotos na aba <em>Biblioteca</em> ou adicione em <code>fotos/</code>.</p>';
       return;
     }
     out.innerHTML = '<p class="hint">Clique em uma foto para adicioná-la à galeria.</p>' +
