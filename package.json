@@ -6,7 +6,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "build": "node scripts/build-manifest.js",
+    "build:manifest": "node scripts/build-manifest.js"
   },
   "engines": {
     "node": ">=18.17"
