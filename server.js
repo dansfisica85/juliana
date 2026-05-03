@@ -34,8 +34,11 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_VERCEL = !!process.env.VERCEL;
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(48).toString('hex');
-const ADMIN_INITIAL_USER = process.env.ADMIN_INITIAL_USER || 'JulianaAdmin';
-const ADMIN_INITIAL_PASSWORD = process.env.ADMIN_INITIAL_PASSWORD || 'ModaeBemEstar2026#';
+// Aceita tanto ADMIN_INITIAL_USER/PASSWORD quanto ADMIN_USER/ADMIN_PASS (Vercel).
+const ADMIN_INITIAL_USER =
+  process.env.ADMIN_INITIAL_USER || process.env.ADMIN_USER || 'JulianaAdmin';
+const ADMIN_INITIAL_PASSWORD =
+  process.env.ADMIN_INITIAL_PASSWORD || process.env.ADMIN_PASS || 'ModaeBemEstar2026#';
 
 if (!process.env.JWT_SECRET) {
   console.warn('[aviso] JWT_SECRET não definido — sessões serão invalidadas a cada restart.');
@@ -129,6 +132,16 @@ function ensureDb() {
         args: [ADMIN_INITIAL_USER, hash],
       });
       console.log(`[ok] Admin inicial criado: ${ADMIN_INITIAL_USER}`);
+    } else if (process.env.ADMIN_USER && process.env.ADMIN_PASS) {
+      // Permite (re)definir o admin via variáveis de ambiente.
+      // Útil quando ADMIN_PASS muda na Vercel: força o sync com o banco.
+      const hash = await bcrypt.hash(String(process.env.ADMIN_PASS), 12);
+      await db.execute({
+        sql: `INSERT INTO admin_user (username, password_hash) VALUES (?, ?)
+              ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash`,
+        args: [String(process.env.ADMIN_USER), hash],
+      });
+      console.log(`[ok] Admin sincronizado com env: ${process.env.ADMIN_USER}`);
     }
   })().catch((err) => { dbReady = null; throw err; });
   return dbReady;

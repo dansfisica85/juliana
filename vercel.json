@@ -1,8 +1,5 @@
 {
   "version": 2,
-  "buildCommand": "npm run build:manifest",
-  "outputDirectory": ".",
-  "installCommand": "npm install",
   "framework": null,
   "functions": {
     "api/index.js": {
