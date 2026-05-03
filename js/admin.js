@@ -54,18 +54,56 @@
       { key: 'moda-post-1', label: 'Card 1' },
       { key: 'moda-post-2', label: 'Card 2' },
       { key: 'moda-post-3', label: 'Card 3' },
+      { key: 'hl-moda-1',   label: 'Destaque 1 (foto)' },
+      { key: 'hl-moda-2',   label: 'Destaque 2 (foto)' },
+      { key: 'hl-moda-3',   label: 'Destaque 3 (foto)' },
     ]},
     { group: 'Bem-estar', items: [
       { key: 'bem-hero',   label: 'Hero da página Bem-estar' },
       { key: 'bem-post-1', label: 'Card 1' },
       { key: 'bem-post-2', label: 'Card 2' },
       { key: 'bem-post-3', label: 'Card 3' },
+      { key: 'hl-bem-estar-1', label: 'Destaque 1 (foto)' },
+      { key: 'hl-bem-estar-2', label: 'Destaque 2 (foto)' },
+      { key: 'hl-bem-estar-3', label: 'Destaque 3 (foto)' },
     ]},
     { group: 'Qualidade de Vida', items: [
       { key: 'vida-hero',   label: 'Hero da página Qualidade de Vida' },
       { key: 'vida-post-1', label: 'Card 1' },
       { key: 'vida-post-2', label: 'Card 2' },
       { key: 'vida-post-3', label: 'Card 3' },
+      { key: 'hl-vida-1',   label: 'Destaque 1 (foto)' },
+      { key: 'hl-vida-2',   label: 'Destaque 2 (foto)' },
+      { key: 'hl-vida-3',   label: 'Destaque 3 (foto)' },
+    ]},
+  ];
+
+  // Catálogo de TEXTOS editáveis pelo admin
+  var TEXT_CATALOG = [
+    { group: 'Início', items: [
+      { key: 'home-hero-title',   label: 'Hero — título', rows: 1 },
+      { key: 'home-hero-tagline', label: 'Hero — descrição', rows: 3 },
+    ]},
+    { group: 'Moda', items: [
+      { key: 'moda-hero-title',   label: 'Hero — título', rows: 1 },
+      { key: 'moda-hero-tagline', label: 'Hero — descrição', rows: 3 },
+      { key: 'hl-moda-1-text',    label: 'Destaque 1 — frase motivacional', rows: 2 },
+      { key: 'hl-moda-2-text',    label: 'Destaque 2 — frase motivacional', rows: 2 },
+      { key: 'hl-moda-3-text',    label: 'Destaque 3 — frase motivacional', rows: 2 },
+    ]},
+    { group: 'Bem-estar', items: [
+      { key: 'bem-hero-title',         label: 'Hero — título', rows: 1 },
+      { key: 'bem-hero-tagline',       label: 'Hero — descrição', rows: 3 },
+      { key: 'hl-bem-estar-1-text',    label: 'Destaque 1 — frase motivacional', rows: 2 },
+      { key: 'hl-bem-estar-2-text',    label: 'Destaque 2 — frase motivacional', rows: 2 },
+      { key: 'hl-bem-estar-3-text',    label: 'Destaque 3 — frase motivacional', rows: 2 },
+    ]},
+    { group: 'Qualidade de Vida', items: [
+      { key: 'vida-hero-title',   label: 'Hero — título', rows: 1 },
+      { key: 'vida-hero-tagline', label: 'Hero — descrição', rows: 3 },
+      { key: 'hl-vida-1-text',    label: 'Destaque 1 — frase motivacional', rows: 2 },
+      { key: 'hl-vida-2-text',    label: 'Destaque 2 — frase motivacional', rows: 2 },
+      { key: 'hl-vida-3-text',    label: 'Destaque 3 — frase motivacional', rows: 2 },
     ]},
   ];
 
@@ -77,6 +115,7 @@
     slots: {},
     uploads: [],
     localMedia: [],
+    texts: {},
   };
 
   // -------------------------------------------------------------------------
@@ -180,13 +219,54 @@
       fetchJson(API + '/content/slots'),
       fetchJson(API + '/uploads'),
       fetchJson(API + '/local-media'),
+      fetchJson(API + '/content/texts').catch(function () { return { texts: {} }; }),
     ]).then(function (r) {
       st.slots = r[0].slots || {};
       st.uploads = r[1].files || [];
       st.localMedia = r[2].files || [];
+      st.texts = r[3].texts || {};
       renderSlots();
       renderLibrary();
+      renderTexts();
     }).catch(function () { setStatus('Falha ao carregar dados.', 'error'); });
+  }
+
+  // -------------------------------------------------------------------------
+  // Textos editáveis
+  // -------------------------------------------------------------------------
+  function renderTexts() {
+    var host = $('#text-slots');
+    if (!host) return;
+    host.innerHTML = TEXT_CATALOG.map(function (g) {
+      return '<div class="slot-group"><h3>' + esc(g.group) + '</h3>' +
+        '<div class="text-grid">' + g.items.map(function (it) {
+          var v = st.texts[it.key] != null ? st.texts[it.key] : '';
+          var rows = it.rows || 2;
+          var input = rows > 1
+            ? '<textarea data-text-key="' + esc(it.key) + '" rows="' + rows + '">' + esc(v) + '</textarea>'
+            : '<input type="text" data-text-key="' + esc(it.key) + '" value="' + esc(v) + '">';
+          return '<label class="text-field"><span><strong>' + esc(it.label) + '</strong>' +
+            '<small>' + esc(it.key) + '</small></span>' + input + '</label>';
+        }).join('') + '</div></div>';
+    }).join('');
+  }
+
+  function bindTexts() {
+    var save = $('#texts-save');
+    if (!save) return;
+    save.addEventListener('click', function () {
+      var fields = $$('#text-slots [data-text-key]');
+      var payload = {};
+      fields.forEach(function (f) {
+        payload[f.getAttribute('data-text-key')] = f.value || '';
+      });
+      fetchJson(API + '/content/texts', {
+        method: 'PUT', body: JSON.stringify({ texts: payload }),
+      }).then(function (r) {
+        st.texts = Object.assign({}, st.texts, payload);
+        setStatus('Textos salvos (' + r.count + ').', 'success');
+      }).catch(function () { setStatus('Falha ao salvar textos.', 'error'); });
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -532,6 +612,7 @@
     bindPicker();
     bindGallery();
     bindSubmissions();
+    bindTexts();
 
     fetchJson(API + '/auth/me').then(function (r) {
       st.me = r.user;
