@@ -1024,3 +1024,56 @@ table.submissions tr:hover td { background: var(--color-bg); }
 
 /* utilitários */
 .hint { color: var(--color-muted); font-size: 0.92rem; }
+
+/* --- destaques foto + frase motivacional ------------------------------- */
+.highlight-list { display: grid; gap: 1.5rem; margin-top: 1rem; }
+.highlight-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.highlight-row.reverse { direction: rtl; }
+.highlight-row.reverse > * { direction: ltr; }
+.highlight-photo { margin: 0; aspect-ratio: 4/5; overflow: hidden; }
+.highlight-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.highlight-text { padding: 1.5rem; }
+.highlight-text blockquote {
+  margin: 0;
+  font-family: 'Playfair Display', serif;
+  font-size: 1.35rem;
+  line-height: 1.45;
+  color: var(--color-primary-dark);
+  position: relative;
+  padding-left: 1rem;
+  border-left: 3px solid var(--color-primary);
+}
+@media (max-width: 720px) {
+  .highlight-row { grid-template-columns: 1fr; }
+  .highlight-row.reverse { direction: ltr; }
+  .highlight-photo { aspect-ratio: 3/2; }
+}
+
+/* --- aba textos no admin ----------------------------------------------- */
+.text-grid { display: grid; gap: 1rem; margin-top: 0.75rem; }
+.text-field {
+  display: flex; flex-direction: column; gap: 0.35rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+}
+.text-field span { display: flex; flex-direction: column; }
+.text-field strong { color: var(--color-primary-dark); font-size: 0.95rem; }
+.text-field small { color: var(--color-muted); font-size: 0.78rem; }
+.text-field input,
+.text-field textarea {
+  width: 100%; padding: 0.55rem 0.7rem;
+  border: 1px solid var(--color-border); border-radius: 6px;
+  font: inherit; resize: vertical; min-height: 38px;
+}
