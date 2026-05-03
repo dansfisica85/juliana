@@ -114,6 +114,11 @@ function ensureDb() {
         data BLOB NOT NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       )`,
+      `CREATE TABLE IF NOT EXISTS text_slots (
+        slot_key TEXT PRIMARY KEY,
+        value TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
     ], 'write');
 
     const existing = await db.execute('SELECT id FROM admin_user LIMIT 1');
@@ -317,6 +322,31 @@ api.delete('/content/slots/:key', authRequired, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- Textos editáveis -----------------------------------------------------
+api.get('/content/texts', async (_req, res) => {
+  const result = await db.execute('SELECT slot_key, value FROM text_slots');
+  const texts = {};
+  for (const row of result.rows) texts[row.slot_key] = row.value || '';
+  res.json({ texts });
+});
+
+api.put('/content/texts', authRequired, async (req, res) => {
+  const texts = req.body && req.body.texts;
+  if (!texts || typeof texts !== 'object') return res.status(400).json({ error: 'missing_texts' });
+  const entries = Object.entries(texts);
+  for (const [key, value] of entries) {
+    if (!/^[a-z0-9._-]{1,80}$/i.test(key)) continue;
+    const v = String(value == null ? '' : value).slice(0, 4000);
+    await db.execute({
+      sql: `INSERT INTO text_slots (slot_key, value, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(slot_key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')`,
+      args: [key, v],
+    });
+  }
+  res.json({ ok: true, count: entries.length });
+});
+
 // ---- Galeria --------------------------------------------------------------
 api.get('/content/gallery', async (_req, res) => {
   const result = await db.execute(
@@ -404,46 +434,43 @@ app.get('/uploads/:id', serveUpload);
 
 // ---- Mídia local (pasta fotos/) ------------------------------------------
 api.get('/local-media', (req, res) => {
-  if (!fs.existsSync(LOCAL_MEDIA_DIR)) return res.json({ files: [] });
-  const raw = fs.readdirSync(LOCAL_MEDIA_DIR)
-    .filter(f => !f.startsWith('.') && f.toLowerCase() !== 'readme.md')
-    .map(f => {
-      const ext = path.extname(f).toLowerCase();
-      const isVideo = ['.mp4', '.webm', '.mov', '.m4v'].includes(ext);
-      const isImage = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif'].includes(ext);
-      if (!isVideo && !isImage) return null;
-      return {
-        name: f,
-        url: LOCAL_MEDIA_URL + '/' + encodeURIComponent(f),
-        kind: isVideo ? 'video' : 'image',
-        shoot: extractShootKey(f),
-      };
-    })
-    .filter(Boolean);
+  let files = [];
 
-  // Ordena estável por nome (timestamp ASC) para gerar categorias previsíveis
-  raw.sort((a, b) => a.name.localeCompare(b.name));
-
-  // Atribui categoria por "shoot" (mesmo timestamp = mesmo ensaio): shoots
-  // alternam-se entre moda → bem-estar → vida em ordem cronológica.
-  const shootIndex = new Map();
-  let idx = 0;
-  for (const f of raw) {
-    if (!shootIndex.has(f.shoot)) shootIndex.set(f.shoot, idx++);
+  // 1) Tenta o manifest estático (gerado no build) — é o caminho que funciona
+  //    em qualquer ambiente, inclusive Functions sem acesso ao filesystem.
+  const manifestPath = path.join(LOCAL_MEDIA_DIR, 'manifest.json');
+  if (fs.existsSync(manifestPath)) {
+    try {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      if (manifest && Array.isArray(manifest.files)) files = manifest.files;
+    } catch (e) { /* ignora e cai no readdir */ }
   }
-  const files = raw.map((f, i) => {
-    const sIdx = shootIndex.get(f.shoot) || 0;
-    const category = SITE_CATEGORIES[sIdx % SITE_CATEGORIES.length];
-    // Destaque "automático" para foto de capa de cada shoot (a primeira)
-    const featured = i === 0 || raw[i - 1].shoot !== f.shoot;
-    return {
+
+  // 2) Fallback: lê do disco (modo local, npm start).
+  if (!files.length && fs.existsSync(LOCAL_MEDIA_DIR)) {
+    const raw = fs.readdirSync(LOCAL_MEDIA_DIR)
+      .filter(f => !f.startsWith('.') && f !== 'manifest.json' && f.toLowerCase() !== 'readme.md')
+      .map(f => {
+        const ext = path.extname(f).toLowerCase();
+        const isVideo = ['.mp4', '.webm', '.mov', '.m4v'].includes(ext);
+        const isImage = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif'].includes(ext);
+        if (!isVideo && !isImage) return null;
+        return { name: f, kind: isVideo ? 'video' : 'image', shoot: extractShootKey(f) };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const shootIndex = new Map();
+    let idx = 0;
+    for (const f of raw) if (!shootIndex.has(f.shoot)) shootIndex.set(f.shoot, idx++);
+    files = raw.map((f, i) => ({
       name: f.name,
-      url: f.url,
+      url: LOCAL_MEDIA_URL + '/' + encodeURIComponent(f.name),
       kind: f.kind,
-      category,
-      featured,
-    };
-  });
+      category: SITE_CATEGORIES[(shootIndex.get(f.shoot) || 0) % SITE_CATEGORIES.length],
+      featured: i === 0 || raw[i - 1].shoot !== f.shoot,
+    }));
+  }
 
   const cat = String(req.query.category || '').trim().toLowerCase();
   const filtered = cat && SITE_CATEGORIES.includes(cat)

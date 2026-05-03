@@ -56,16 +56,26 @@
   var state = {
     slots: {},                  // { key: {kind, src, caption, featured} }
     gallery: [],                // [{src, thumb, url, photographer, alt}]
-    localMedia: { images: [], videos: [], featured: [] },
+    localMedia: { images: [], videos: [], featured: [], all: [] },
     me: null,                   // {username} se logado
+    texts: {},                  // { key: 'string' } textos editáveis
   };
 
   function loadAll() {
     return Promise.all([
       fetchJson(API + '/content/slots').catch(function () { return { slots: {} }; }),
       fetchJson(API + '/content/gallery').catch(function () { return { items: [] }; }),
-      fetchJson(API + '/local-media').catch(function () { return { files: [] }; }),
+      // Preferimos o manifest estático (servido pelo CDN do Vercel) — é mais
+      // rápido e funciona mesmo quando a Function não consegue ler o disco.
+      fetch('/fotos/manifest.json', { cache: 'no-cache' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; })
+        .then(function (manifest) {
+          if (manifest && manifest.files) return { files: manifest.files };
+          return fetchJson(API + '/local-media').catch(function () { return { files: [] }; });
+        }),
       fetchJson(API + '/auth/me').catch(function () { return null; }),
+      fetchJson(API + '/content/texts').catch(function () { return { texts: {} }; }),
     ]).then(function (r) {
       state.slots = (r[0] && r[0].slots) || {};
       state.gallery = ((r[1] && r[1].items) || []).map(function (it) {
@@ -85,6 +95,7 @@
         featured: files.filter(function (f) { return f.kind === 'image' && f.featured; }),
       };
       state.me = r[3] && r[3].user ? r[3].user : null;
+      state.texts = (r[4] && r[4].texts) || {};
     });
   }
 
@@ -192,10 +203,79 @@
   }
 
   function applyAll() {
+    applyTexts();
     $$('[data-img-key]').forEach(applyImageSlot);
     $$('[data-video-key]').forEach(applyVideoSlot);
     distributeExtras();
+    renderHighlights();
     renderGallery();
+  }
+
+  // ----- Textos editáveis pelo admin --------------------------------------
+  function applyTexts() {
+    if (!state.texts) return;
+    $$('[data-text-key]').forEach(function (el) {
+      var key = el.getAttribute('data-text-key');
+      var val = state.texts[key];
+      if (val == null || val === '') return;
+      // Se o elemento tem data-text-html="1", interpreta como HTML simples
+      if (el.getAttribute('data-text-html') === '1') {
+        el.innerHTML = String(val);
+      } else {
+        el.textContent = String(val);
+      }
+    });
+  }
+
+  // ----- Destaques editáveis: foto + frase motivacional -------------------
+  // Procura blocos [data-jb-highlights="<categoria>"] e renderiza as fotos
+  // e frases definidas pelo admin em slots `hl-<categoria>-1..3` (foto)
+  // e textos `hl-<categoria>-1-text..3-text`.
+  function renderHighlights() {
+    $$('[data-jb-highlights]').forEach(function (host) {
+      var cat = host.getAttribute('data-jb-highlights') || pageCategory() || 'moda';
+      var fallbackPool = featuredForCategory(cat);
+      if (!fallbackPool.length) fallbackPool = imagesForCategory(cat);
+      var html = '';
+      for (var i = 1; i <= 3; i++) {
+        var imgKey = 'hl-' + cat + '-' + i;
+        var txtKey = 'hl-' + cat + '-' + i + '-text';
+        var slot = state.slots[imgKey];
+        var src = slot && slot.src
+          ? slot.src
+          : (fallbackPool[(i - 1) % fallbackPool.length] && fallbackPool[(i - 1) % fallbackPool.length].url);
+        if (!src) continue;
+        var text = (state.texts && state.texts[txtKey]) || defaultMotivation(cat, i);
+        var even = i % 2 === 0;
+        html += '<article class="highlight-row' + (even ? ' reverse' : '') + '">' +
+          '<figure class="highlight-photo"><img src="' + escapeAttr(src) + '" alt="" loading="lazy"></figure>' +
+          '<div class="highlight-text"><blockquote>' + escapeAttr(text) + '</blockquote></div>' +
+        '</article>';
+      }
+      host.innerHTML = html;
+    });
+  }
+
+  function defaultMotivation(cat, i) {
+    var bank = {
+      'moda': [
+        'Vista o que te faz bem — o estilo nasce da autenticidade.',
+        'A moda passa, o estilo permanece. Escolha o que combina com você.',
+        'Cada look é um lembrete: você merece se sentir linda todo dia.',
+      ],
+      'bem-estar': [
+        'Cuidar de si é o gesto mais bonito que existe.',
+        'Respira fundo: hoje é um bom dia para começar de novo.',
+        'A paz começa em pequenos rituais diários.',
+      ],
+      'vida': [
+        'Pequenos hábitos transformam grandes vidas.',
+        'Durma, hidrate, mova-se — seu corpo agradece em silêncio.',
+        'Viva com propósito; o resto se ajeita.',
+      ],
+    };
+    var arr = bank[cat] || bank.moda;
+    return arr[(i - 1) % arr.length];
   }
 
   // Distribui automaticamente uma faixa de destaques quando há um container
