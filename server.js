@@ -124,7 +124,7 @@ function ensureDb() {
       )`,
     ], 'write');
 
-    const existing = await db.execute('SELECT id FROM admin_user LIMIT 1');
+    const existing = await db.execute('SELECT id, username FROM admin_user LIMIT 1');
     if (existing.rows.length === 0) {
       const hash = await bcrypt.hash(ADMIN_INITIAL_PASSWORD, 12);
       await db.execute({
@@ -132,16 +132,31 @@ function ensureDb() {
         args: [ADMIN_INITIAL_USER, hash],
       });
       console.log(`[ok] Admin inicial criado: ${ADMIN_INITIAL_USER}`);
-    } else if (process.env.ADMIN_USER && process.env.ADMIN_PASS) {
-      // Permite (re)definir o admin via variáveis de ambiente.
-      // Útil quando ADMIN_PASS muda na Vercel: força o sync com o banco.
-      const hash = await bcrypt.hash(String(process.env.ADMIN_PASS), 12);
-      await db.execute({
-        sql: `INSERT INTO admin_user (username, password_hash) VALUES (?, ?)
-              ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash`,
-        args: [String(process.env.ADMIN_USER), hash],
-      });
-      console.log(`[ok] Admin sincronizado com env: ${process.env.ADMIN_USER}`);
+    } else {
+      // Ressincroniza credenciais com o ambiente quando ADMIN_USER e/ou
+      // ADMIN_PASS estão definidos. Útil quando se troca a senha na Vercel:
+      // basta atualizar a env e redeployar.
+      const envUser = process.env.ADMIN_USER ? String(process.env.ADMIN_USER).trim() : null;
+      const envPass = process.env.ADMIN_PASS ? String(process.env.ADMIN_PASS) : null;
+      if (envUser || envPass) {
+        const currentUser = String(existing.rows[0].username);
+        const nextUser = envUser || currentUser;
+        if (envPass) {
+          const hash = await bcrypt.hash(envPass, 12);
+          await db.execute({
+            sql: `UPDATE admin_user SET username = ?, password_hash = ?, updated_at = datetime('now')
+                  WHERE id = ?`,
+            args: [nextUser, hash, existing.rows[0].id],
+          });
+          console.log(`[ok] Admin sincronizado com env (user+pass): ${nextUser}`);
+        } else if (envUser && envUser !== currentUser) {
+          await db.execute({
+            sql: `UPDATE admin_user SET username = ?, updated_at = datetime('now') WHERE id = ?`,
+            args: [nextUser, existing.rows[0].id],
+          });
+          console.log(`[ok] Admin renomeado via env: ${currentUser} → ${nextUser}`);
+        }
+      }
     }
   })().catch((err) => { dbReady = null; throw err; });
   return dbReady;
